@@ -56,9 +56,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
           Positioned(
             top: 40,
             right: 20,
-            child: IconButton(
-              icon: const Icon(Icons.subtitles, color: Colors.white),
-              onPressed: () => _showTracks(context),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.audiotrack, color: Colors.white),
+                  onPressed: () => _showAudioTracks(context),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.subtitles, color: Colors.white),
+                  onPressed: () => _showSubtitleTracks(context),
+                ),
+              ],
             ),
           ),
         ],
@@ -66,7 +74,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  void _showTracks(BuildContext context) {
+  void _showSubtitleTracks(BuildContext context) {
     showModalBottomSheet(
       context: context,
       builder: (context) {
@@ -90,6 +98,41 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   trailing: track == current ? const Icon(Icons.check) : null,
                   onTap: () {
                     player.setSubtitleTrack(track);
+                    Navigator.pop(context);
+                  },
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showAudioTracks(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return StreamBuilder<Tracks>(
+          stream: player.stream.tracks,
+          initialData: player.state.tracks,
+          builder: (context, snapshot) {
+            final tracks = snapshot.data?.audio ?? [];
+            final current = player.state.track.audio;
+
+            return ListView.builder(
+              itemCount: tracks.length,
+              itemBuilder: (context, index) {
+                final track = tracks[index];
+                return ListTile(
+                  title: Text(
+                    track.title ?? track.language ?? 'Track ${index}',
+                  ),
+                  subtitle: Text(track.id),
+                  selected: track == current,
+                  trailing: track == current ? const Icon(Icons.check) : null,
+                  onTap: () {
+                    player.setAudioTrack(track);
                     Navigator.pop(context);
                   },
                 );
