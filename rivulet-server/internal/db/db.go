@@ -1,9 +1,8 @@
 package db
 
 import (
-	// "fmt"
 	"log"
-	// "os"
+	"os"
 	"rivulet_server/internal/models"
 
 	"gorm.io/driver/postgres"
@@ -14,7 +13,11 @@ var DB *gorm.DB
 
 func Connect() {
 	// For dev, we hardcode these. In prod, use os.Getenv()
-	dsn := "host=localhost user=rivulet password=password dbname=rivulet_db port=5432 sslmode=disable TimeZone=UTC"
+	dsn := os.Getenv("DATABASE_DSN")
+	if dsn == "" {
+		// Fallback for local dev
+		dsn = "host=localhost user=rivulet password=password dbname=rivulet_db port=5432 sslmode=disable TimeZone=UTC"
+	}
 
 	var err error
 	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})

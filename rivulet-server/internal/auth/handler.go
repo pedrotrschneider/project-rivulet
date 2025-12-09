@@ -60,15 +60,18 @@ func Register(c echo.Context) error {
 		return err
 	}
 
+	tx := db.DB.Begin()
+
 	hashed, _ := hashPassword(req.Password)
 	account := models.Account{
 		Email:        req.Email,
 		PasswordHash: hashed,
 	}
 
-	if result := db.DB.Create(&account); result.Error != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "User likely exists"})
-	}
+	if err := tx.Create(&account).Error; err != nil {
+        tx.Rollback()
+        return c.JSON(http.StatusBadRequest, map[string]string{"error": "User likely exists"})
+    }
 
 	profile := models.Profile{
 		AccountID: account.ID,
@@ -76,12 +79,14 @@ func Register(c echo.Context) error {
 		Avatar:    "https://api.dicebear.com/7.x/bottts/svg?seed=Default", // Placeholder
 	}
 
-	if err := db.DB.Create(&profile).Error; err != nil {
-		db.DB.Rollback()
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to create profile"})
-	}
+	if err := tx.Create(&profile).Error; err != nil {
+        tx.Rollback()
+        return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to create profile"})
+    }
 
-	db.DB.Commit()
+	if err := tx.Commit().Error; err != nil {
+        return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to commit transaction"})
+    }
 
 	return c.JSON(http.StatusCreated, map[string]string{"message": "User created"})
 }
