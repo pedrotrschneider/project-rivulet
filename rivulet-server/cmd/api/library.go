@@ -94,6 +94,13 @@ func GetLibrary(c echo.Context) error {
 	}
 
 	// Enhance Response
+
+	type SeasonInfo struct {
+		SeasonNumber int    `json:"season_number"`
+		Title        string `json:"title"`
+		Poster       string `json:"poster_url"`
+	}
+
 	type ResponseItem struct {
 		UUID      uuid.UUID `json:"uuid"`
 		Title     string    `json:"title"`
@@ -102,22 +109,57 @@ func GetLibrary(c echo.Context) error {
 		Logo      string    `json:"logo_url"`
 		Type      string    `json:"type"`
 		AddedAt   string    `json:"added_at"`
+		Seasons   []SeasonInfo `json:"seasons,omitempty"`
 	}
 
 	var response []ResponseItem
 	for _, e := range entries {
 		var title string
 		
-		// 1. Fetch Title
+		var seasonsInfo []SeasonInfo
+
 		if e.MediaType == "movie" {
 			var m models.Movie
 			if err := db.DB.Select("title").First(&m, e.MediaID).Error; err == nil {
 				title = m.Title
 			}
 		} else {
+			// Is Series
 			var s models.Series
 			if err := db.DB.Select("title").First(&s, e.MediaID).Error; err == nil {
 				title = s.Title
+			}
+
+			var dbSeasons []models.Season
+			if err := db.DB.Where("series_id = ?", e.MediaID).Order("season_number asc").Find(&dbSeasons).Error; err == nil {
+				
+				// 1. Collect Season IDs to fetch images in one batch
+				var seasonIDs []uuid.UUID
+				for _, sea := range dbSeasons {
+					seasonIDs = append(seasonIDs, sea.ID)
+				}
+
+				// 2. Fetch Images for these IDs
+				var seasonImages []models.Image
+				if len(seasonIDs) > 0 {
+					// We query all "poster" images belonging to these Season IDs
+					db.DB.Where("owner_id IN ? AND type = ?", seasonIDs, "poster").Find(&seasonImages)
+				}
+
+				// 3. Create Lookup Map (ID -> Path)
+				posterMap := make(map[uuid.UUID]string)
+				for _, img := range seasonImages {
+					posterMap[img.OwnerID] = img.LocalPath
+				}
+
+				// 4. Build Info using the Map
+				for _, sea := range dbSeasons {
+					seasonsInfo = append(seasonsInfo, SeasonInfo{
+						SeasonNumber: sea.SeasonNumber,
+						Title:        sea.Title,
+						Poster:       posterMap[sea.ID],
+					})
+				}
 			}
 		}
 
@@ -147,6 +189,7 @@ func GetLibrary(c echo.Context) error {
 			Logo:     logo,
 			Type:     e.MediaType,
 			AddedAt:  e.CreatedAt.Format(time.RFC3339),
+			Seasons:  seasonsInfo,
 		})
 	}
 

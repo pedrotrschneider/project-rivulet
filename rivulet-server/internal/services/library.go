@@ -18,7 +18,6 @@ func AddToLibrary(mdbClient *mdblist.Client, tmdbClient *tmdb.Client, mdbApiKey,
 	// MDBList expects "tt..." or "tm..."
 	// We assume externalID format: "imdb:tt123" or "tmdb:123" or just "tt123"
 	cleanID := externalID
-	// mediaType := "movie"
 
 	if strings.Contains(externalID, ":") {
 		parts := strings.Split(externalID, ":")
@@ -55,18 +54,18 @@ func AddToLibrary(mdbClient *mdblist.Client, tmdbClient *tmdb.Client, mdbApiKey,
 	backdropPath, _ := DownloadImage(details.Backdrop)
 
 	var logoPath string
-    if details.TmdbID != 0 {
-        // Determine type for TMDB call
-        tmType := "movie"
-        if mediaType != "movie" {
-            tmType = "tv"
-        }
-        
-        logoURL, err := tmdbClient.GetLogo(tmdbApiKey, details.TmdbID, tmType)
-        if err == nil && logoURL != "" {
-            logoPath, _ = DownloadImage(logoURL)
-        }
-    }
+	if details.TmdbID != 0 {
+		// Determine type for TMDB call
+		tmType := "movie"
+		if mediaType != "movie" {
+			tmType = "tv"
+		}
+
+		logoURL, err := tmdbClient.GetLogo(tmdbApiKey, details.TmdbID, tmType)
+		if err == nil && logoURL != "" {
+			logoPath, _ = DownloadImage(logoURL)
+		}
+	}
 
 	// 5. Save to DB
 	if mediaType == "movie" {
@@ -77,7 +76,7 @@ func AddToLibrary(mdbClient *mdblist.Client, tmdbClient *tmdb.Client, mdbApiKey,
 			ExternalIDs:    map[string]any{"imdb": details.ImdbID, "tmdb": details.TmdbID},
 			// Parse Year/Date properly in production
 		}
-		
+
 		// Create DB transaction
 		err = db.DB.Transaction(func(tx *gorm.DB) error {
 			if err := tx.Create(&movie).Error; err != nil {
@@ -103,11 +102,11 @@ func AddToLibrary(mdbClient *mdblist.Client, tmdbClient *tmdb.Client, mdbApiKey,
 	} else {
 		// Is Series
 		series := models.Series{
-			Title:          details.Title,
-			Overview:       details.Description,
-			ExternalIDs:    map[string]any{"imdb": details.ImdbID, "tmdb": details.TmdbID},
+			Title:       details.Title,
+			Overview:    details.Description,
+			ExternalIDs: map[string]any{"imdb": details.ImdbID, "tmdb": details.TmdbID},
 		}
-		
+
 		err = db.DB.Transaction(func(tx *gorm.DB) error {
 			if err := tx.Create(&series).Error; err != nil {
 				return err
@@ -121,6 +120,45 @@ func AddToLibrary(mdbClient *mdblist.Client, tmdbClient *tmdb.Client, mdbApiKey,
 			if logoPath != "" {
 				tx.Create(&models.Image{OwnerType: "Series", OwnerID: series.ID, Type: "logo", LocalPath: logoPath, SourceURL: ""})
 			}
+
+			if details.TmdbID != 0 {
+				tmdbShow, err := tmdbClient.GetTVShowDetails(tmdbApiKey, details.TmdbID)
+				if err != nil || tmdbShow == nil {
+					return err
+				}
+				for _, s := range tmdbShow.Seasons {
+					// A. Download Season Poster
+					var seasonPosterPath string
+					if s.PosterPath != "" {
+						// TMDB returns relative path, need to prepend base
+						fullUrl := "https://image.tmdb.org/t/p/w500" + s.PosterPath
+						seasonPosterPath, _ = DownloadImage(fullUrl)
+					}
+
+					// B. Create Season Record
+					season := models.Season{
+						SeriesID:     series.ID,
+						SeasonNumber: s.SeasonNumber,
+						Title:        s.Name,
+						Overview:     s.Overview,
+						ExternalIDs:  map[string]any{"tmdb": s.ID},
+					}
+					if err := tx.Create(&season).Error; err != nil {
+						continue // Skip failed season but keep going
+					}
+
+					// C. Save Season Image
+					if seasonPosterPath != "" {
+						tx.Create(&models.Image{
+							OwnerType: "Season",
+							OwnerID:   season.ID,
+							Type:      "poster",
+							LocalPath: seasonPosterPath,
+						})
+					}
+				}
+			}
+
 			return nil
 		})
 		if err != nil {

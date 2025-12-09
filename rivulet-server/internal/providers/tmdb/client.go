@@ -54,6 +54,17 @@ type Image struct {
 	Iso639_1    string  `json:"iso_639_1"`
 }
 
+type TVShowDetails struct {
+	Seasons []struct {
+		ID           int    `json:"id"`
+		Name         string `json:"name"`
+		Overview     string `json:"overview"`
+		PosterPath   string `json:"poster_path"`
+		SeasonNumber int    `json:"season_number"`
+		AirDate      string `json:"air_date"`
+	} `json:"seasons"`
+}
+
 // --- Methods ---
 
 func (c *Client) Search(apiKey, query string) ([]Result, error) {
@@ -142,4 +153,22 @@ func (c *Client) GetLogo(apiKey string, tmdbID int, mediaType string) (string, e
 	}
 
 	return "", nil
+}
+
+// GetTVShowDetails fetches season info
+func (c *Client) GetTVShowDetails(apiKey string, tmdbID int) (*TVShowDetails, error) {
+	u := fmt.Sprintf("%s/tv/%d?api_key=%s&language=en-US", BaseURL, tmdbID, apiKey)
+
+	resp, err := c.HttpClient.Get(u)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var details TVShowDetails
+	if err := json.NewDecoder(resp.Body).Decode(&details); err != nil {
+		return nil, err
+	}
+
+	return &details, nil
 }
