@@ -19,6 +19,9 @@ func Start() {
 	e.POST("/api/v1/auth/login", auth.Login)
 	e.POST("/api/v1/auth/verify", auth.Verify)
 
+	// Static assets
+	e.Static("/api/v1/images", "./assets")
+
 	// Protected Routes (Group)
 	v1 := e.Group("/api/v1")
 	v1.Use(auth.RequireAuth) // Apply middleware
@@ -45,6 +48,18 @@ func Start() {
 
 	// Torrent Resolve
 	v1.POST("/stream/resolve", ResolveStream)
+
+	// Profiles
+	v1.GET("/profiles", ListProfiles)
+	v1.POST("/profiles", CreateProfile)
+
+	// Library
+	v1.POST("/library", AddToLibrary)
+    v1.GET("/library", GetLibrary)
+    v1.GET("/library/check/:id", CheckLibrary)
+
+	// History
+	v1.POST("/history/progress", UpdateProgress)
 
 	e.Logger.Fatal(e.Start(":8080"))
 }

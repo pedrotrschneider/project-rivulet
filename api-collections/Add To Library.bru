@@ -1,23 +1,24 @@
 meta {
-  name: Verify
+  name: Add To Library
   type: http
-  seq: 4
+  seq: 12
 }
 
 post {
-  url: {{baseUrl}}/api/v1/auth/verify
+  url: {{baseUrl}}/api/v1/library
   body: json
   auth: inherit
 }
 
 headers {
+  X-MDBList-Key: {{mdblistApiKey}}
   Content-Type: application/json
 }
 
 body:json {
   {
-    "email": "{{devEmail}}",
-    "code": "217785"
+    "external_id": "tt9335498",
+    "media_type": "show"
   }
 }
 

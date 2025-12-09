@@ -36,7 +36,7 @@ func generateOTP() string {
 func sendEmail(to, otp string) {
 	// In Dev, just print it to console to avoid SMTP setup for now
 	fmt.Printf("\n🔥🔥🔥\n[SMTP MOCK] To: %s | OTP: %s\n🔥🔥🔥\n\n", to, otp)
-	
+
 	// Real implementation for later:
 	// m := gomail.NewMessage()
 	// m.SetHeader("From", "auth@rivulet.media")
@@ -69,6 +69,19 @@ func Register(c echo.Context) error {
 	if result := db.DB.Create(&account); result.Error != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "User likely exists"})
 	}
+
+	profile := models.Profile{
+		AccountID: account.ID,
+		Name:      "Default",
+		Avatar:    "https://api.dicebear.com/7.x/bottts/svg?seed=Default", // Placeholder
+	}
+
+	if err := db.DB.Create(&profile).Error; err != nil {
+		db.DB.Rollback()
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "Failed to create profile"})
+	}
+
+	db.DB.Commit()
 
 	return c.JSON(http.StatusCreated, map[string]string{"message": "User created"})
 }

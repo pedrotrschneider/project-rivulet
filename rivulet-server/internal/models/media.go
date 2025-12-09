@@ -11,12 +11,12 @@ type Movie struct {
 	Base
 	Title            string         `gorm:"index;not null"`
 	Overview         string         `gorm:"type:text"`
-	ExternalIDs      map[string]any `gorm:"serializer:json"` // Stores {"tmdb": 123, "imdb": "tt..."}
+	ExternalIDs      map[string]any `gorm:"type:jsonb;serializer:json"` 
 	MetadataSource   string         `gorm:"default:'manual'"`
 	ReleaseDate      *time.Time
-	Runtime          int    // In minutes
+	Runtime          int
 	OriginalLanguage string
-	Images           []Image `gorm:"polymorphic:Owner;"`
+	Images           []Image  `gorm:"polymorphic:Owner;"`
 	Credits          []Credit `gorm:"polymorphic:Media;"`
 }
 
@@ -24,11 +24,11 @@ type Series struct {
 	Base
 	Title         string         `gorm:"index;not null"`
 	Overview      string         `gorm:"type:text"`
-	Status        string         // "Ended", "Returning Series"
-	ContentRating string         // "TV-MA", "TV-14"
-	ExternalIDs   map[string]any `gorm:"serializer:json"`
+	Status        string
+	ContentRating string
+	ExternalIDs   map[string]any `gorm:"type:jsonb;serializer:json"`
 	Seasons       []Season
-	Images        []Image `gorm:"polymorphic:Owner;"`
+	Images        []Image  `gorm:"polymorphic:Owner;"`
 	Credits       []Credit `gorm:"polymorphic:Media;"`
 }
 
@@ -38,7 +38,7 @@ type Season struct {
 	SeasonNumber int            `gorm:"not null"`
 	Title        string
 	Overview     string         `gorm:"type:text"`
-	ExternalIDs  map[string]any `gorm:"serializer:json"`
+	ExternalIDs  map[string]any `gorm:"type:jsonb;serializer:json"`
 	Episodes     []Episode
 	Images       []Image `gorm:"polymorphic:Owner;"`
 }
@@ -52,7 +52,7 @@ type Episode struct {
 	Overview      string         `gorm:"type:text"`
 	AirDate       *time.Time
 	Runtime       int
-	ExternalIDs   map[string]any `gorm:"serializer:json"`
+	ExternalIDs   map[string]any `gorm:"type:jsonb;serializer:json"`
 	StillImage    Image          `gorm:"polymorphic:Owner;"`
 }
 
@@ -64,8 +64,8 @@ type Person struct {
 	Biography        string         `gorm:"type:text"`
 	BirthDate        *time.Time
 	PlaceOfBirth     string
-	ProfileImagePath string         // Local path to headshot
-	ExternalIDs      map[string]any `gorm:"serializer:json"`
+	ProfileImagePath string
+	ExternalIDs      map[string]any `gorm:"type:jsonb;serializer:json"`
 }
 
 type Credit struct {

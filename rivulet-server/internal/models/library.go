@@ -26,7 +26,7 @@ type MediaProgress struct {
 	ProfileID uuid.UUID `gorm:"type:uuid;uniqueIndex:idx_prog_profile_media;not null"`
 	
 	// What are we watching?
-	MovieID   *uuid.UUID `gorm:"type:uuid;uniqueIndex:idx_prog_profile_media"`
+	MediaID   *uuid.UUID `gorm:"type:uuid;uniqueIndex:idx_prog_profile_media"`
 	EpisodeID *uuid.UUID `gorm:"type:uuid;uniqueIndex:idx_prog_profile_media"`
 	
 	PositionTicks int64 // Stored in ticks (10,000 ticks = 1ms) or seconds, up to you.

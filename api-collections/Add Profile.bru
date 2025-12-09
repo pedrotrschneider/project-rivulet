@@ -1,11 +1,11 @@
 meta {
-  name: Verify
+  name: Add Profile
   type: http
-  seq: 4
+  seq: 5
 }
 
 post {
-  url: {{baseUrl}}/api/v1/auth/verify
+  url: {{baseUrl}}/api/v1/profiles
   body: json
   auth: inherit
 }
@@ -16,8 +16,7 @@ headers {
 
 body:json {
   {
-    "email": "{{devEmail}}",
-    "code": "217785"
+    "name": "Kids"
   }
 }
 
