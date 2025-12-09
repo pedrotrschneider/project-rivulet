@@ -1,0 +1,21 @@
+meta {
+  name: Scrape Torrents
+  type: http
+  seq: 8
+}
+
+get {
+  url: {{baseUrl}}/api/v1/stream/scrape?external_id=imdb:tt26537229&type=movie
+  body: none
+  auth: inherit
+}
+
+params:query {
+  external_id: imdb:tt26537229
+  type: movie
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

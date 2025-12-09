@@ -1,0 +1,27 @@
+meta {
+  name: Resolve Stream
+  type: http
+  seq: 9
+}
+
+post {
+  url: {{baseUrl}}/api/v1/stream/resolve
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+  X-RD-Token: {{rdApiKey}}
+}
+
+body:json {
+  {
+    "magnet": "magnet:?xt=urn:btih:5ad409b6a90786eca0cdd4912a3b2c566fdc2341"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

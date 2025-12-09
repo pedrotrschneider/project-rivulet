@@ -1,0 +1,27 @@
+meta {
+  name: Login
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{baseUrl}}/api/v1/auth/login
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "email": "{{devEmail}}",
+    "password": "{{devPassword}}"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

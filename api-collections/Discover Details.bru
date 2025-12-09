@@ -1,0 +1,28 @@
+meta {
+  name: Discover Details
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/discover/details/:id?type=movie
+  body: none
+  auth: inherit
+}
+
+params:query {
+  type: movie
+}
+
+params:path {
+  id: 1067282
+}
+
+headers {
+  X-MDBList-Key: {{mdblistApiKey}}
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

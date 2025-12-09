@@ -1,0 +1,24 @@
+meta {
+  name: Discover Search
+  type: http
+  seq: 7
+}
+
+get {
+  url: {{baseUrl}}/api/v1/discover/search?q="demon slayer"
+  body: none
+  auth: inherit
+}
+
+params:query {
+  q: "demon slayer"
+}
+
+headers {
+  X-TMDB-Key: {{tmdbApiKey}}
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
