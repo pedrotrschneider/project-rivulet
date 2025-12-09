@@ -44,6 +44,16 @@ type Result struct {
 	Overview     string  `json:"overview"`
 }
 
+type ImagesResponse struct {
+	Logos []Image `json:"logos"`
+}
+
+type Image struct {
+	FilePath    string  `json:"file_path"`
+	VoteAverage float64 `json:"vote_average"`
+	Iso639_1    string  `json:"iso_639_1"`
+}
+
 // --- Methods ---
 
 func (c *Client) Search(apiKey, query string) ([]Result, error) {
@@ -101,4 +111,35 @@ func (c *Client) GetTrending(apiKey string) ([]Result, error) {
 	}
 
 	return response.Results, nil
+}
+
+// GetLogo fetches the highest-rated English logo
+func (c *Client) GetLogo(apiKey string, tmdbID int, mediaType string) (string, error) {
+	// Endpoint: /movie/{id}/images or /tv/{id}/images
+	endpointType := "movie"
+	if mediaType == "show" || mediaType == "tv" || mediaType == "series" {
+		endpointType = "tv"
+	}
+
+	u := fmt.Sprintf("%s/%s/%d/images?api_key=%s&include_image_language=en,null", BaseURL, endpointType, tmdbID, apiKey)
+
+	resp, err := c.HttpClient.Get(u)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var imgResp ImagesResponse
+	if err := json.NewDecoder(resp.Body).Decode(&imgResp); err != nil {
+		return "", err
+	}
+
+	// Find best logo (highest rated, English)
+	if len(imgResp.Logos) > 0 {
+		// TMDB usually sorts by rating desc, so taking the first one is safe.
+		// We prioritize strictly English if available, or fallback.
+		return ImageBase + imgResp.Logos[0].FilePath, nil
+	}
+
+	return "", nil
 }

@@ -34,7 +34,8 @@ func getActiveProfile(c echo.Context, accountID uuid.UUID) (models.Profile, erro
 // POST /library
 func AddToLibrary(c echo.Context) error {
 	// 1. Get Inputs
-	apiKey := c.Request().Header.Get("X-MDBList-Key") // Or use server config
+	mdbApiKey := c.Request().Header.Get("X-MDBList-Key") // Or use server config
+	tmdbApiKey := c.Request().Header.Get("X-TMDB-Key")
 	userID := c.Get("user_id").(uuid.UUID)
 	
 	profile, err := getActiveProfile(c, userID)
@@ -51,7 +52,7 @@ func AddToLibrary(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
 
-	err = services.AddToLibrary(MdbClient, apiKey, req.ExternalID, req.MediaType, profile.ID)
+	err = services.AddToLibrary(MdbClient, TmdbClient, mdbApiKey, tmdbApiKey, req.ExternalID, req.MediaType, profile.ID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -98,6 +99,7 @@ func GetLibrary(c echo.Context) error {
 		Title     string    `json:"title"`
 		Poster    string    `json:"poster_url"`
 		Backdrop  string    `json:"backdrop_url"`
+		Logo      string    `json:"logo_url"`
 		Type      string    `json:"type"`
 		AddedAt   string    `json:"added_at"`
 	}
@@ -120,16 +122,19 @@ func GetLibrary(c echo.Context) error {
 		}
 
 		// 2. Fetch Images Explicitly
-		var poster, backdrop string
+		var poster, backdrop, logo string
 		
 		// We fetch all images for this media at once to save queries
 		var images []models.Image
 		if err := db.DB.Where("owner_id = ?", e.MediaID).Find(&images).Error; err == nil {
 			for _, img := range images {
-				if img.Type == "poster" {
+				switch img.Type {
+				case "poster":
 					poster = img.LocalPath
-				} else if img.Type == "backdrop" {
+				case "backdrop":
 					backdrop = img.LocalPath
+				case "logo":
+					logo = img.LocalPath
 				}
 			}
 		}
@@ -138,7 +143,8 @@ func GetLibrary(c echo.Context) error {
 			UUID:     e.MediaID,
 			Title:    title,
 			Poster:   poster,
-			Backdrop: backdrop, // ✅ Populated
+			Backdrop: backdrop,
+			Logo:     logo,
 			Type:     e.MediaType,
 			AddedAt:  e.CreatedAt.Format(time.RFC3339),
 		})

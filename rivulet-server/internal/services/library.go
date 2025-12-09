@@ -5,6 +5,7 @@ import (
 	"rivulet_server/internal/db"
 	"rivulet_server/internal/models"
 	"rivulet_server/internal/providers/mdblist"
+	"rivulet_server/internal/providers/tmdb"
 	"strings"
 
 	"github.com/google/uuid"
@@ -12,7 +13,7 @@ import (
 )
 
 // AddToLibrary handles the entire flow of adding media
-func AddToLibrary(mdbClient *mdblist.Client, apiKey, externalID, mediaType string, profileID uuid.UUID) error {
+func AddToLibrary(mdbClient *mdblist.Client, tmdbClient *tmdb.Client, mdbApiKey, tmdbApiKey, externalID, mediaType string, profileID uuid.UUID) error {
 	// 1. Determine Type and ID
 	// MDBList expects "tt..." or "tm..."
 	// We assume externalID format: "imdb:tt123" or "tmdb:123" or just "tt123"
@@ -44,8 +45,7 @@ func AddToLibrary(mdbClient *mdblist.Client, apiKey, externalID, mediaType strin
 	}
 
 	// 3. Fetch from MDBList
-	// We try "movie" first, if fail/empty, try "show" (or handle generic)
-	details, err := mdbClient.GetDetails(apiKey, cleanID, mediaType)
+	details, err := mdbClient.GetDetails(mdbApiKey, cleanID, mediaType)
 	if err != nil {
 		return fmt.Errorf("metadata not found: %v", err)
 	}
@@ -53,6 +53,20 @@ func AddToLibrary(mdbClient *mdblist.Client, apiKey, externalID, mediaType strin
 	// 4. Download Images
 	posterPath, _ := DownloadImage(details.Poster)
 	backdropPath, _ := DownloadImage(details.Backdrop)
+
+	var logoPath string
+    if details.TmdbID != 0 {
+        // Determine type for TMDB call
+        tmType := "movie"
+        if mediaType != "movie" {
+            tmType = "tv"
+        }
+        
+        logoURL, err := tmdbClient.GetLogo(tmdbApiKey, details.TmdbID, tmType)
+        if err == nil && logoURL != "" {
+            logoPath, _ = DownloadImage(logoURL)
+        }
+    }
 
 	// 5. Save to DB
 	if mediaType == "movie" {
@@ -75,6 +89,9 @@ func AddToLibrary(mdbClient *mdblist.Client, apiKey, externalID, mediaType strin
 			}
 			if backdropPath != "" {
 				tx.Create(&models.Image{OwnerType: "Movie", OwnerID: movie.ID, Type: "backdrop", LocalPath: backdropPath, SourceURL: details.Backdrop})
+			}
+			if logoPath != "" {
+				tx.Create(&models.Image{OwnerType: "Movie", OwnerID: movie.ID, Type: "logo", LocalPath: logoPath, SourceURL: ""})
 			}
 			return nil
 		})
@@ -100,6 +117,9 @@ func AddToLibrary(mdbClient *mdblist.Client, apiKey, externalID, mediaType strin
 			}
 			if backdropPath != "" {
 				tx.Create(&models.Image{OwnerType: "Series", OwnerID: series.ID, Type: "backdrop", LocalPath: backdropPath, SourceURL: details.Backdrop})
+			}
+			if logoPath != "" {
+				tx.Create(&models.Image{OwnerType: "Series", OwnerID: series.ID, Type: "logo", LocalPath: logoPath, SourceURL: ""})
 			}
 			return nil
 		})
