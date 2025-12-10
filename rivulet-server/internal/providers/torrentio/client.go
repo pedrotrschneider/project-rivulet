@@ -3,6 +3,7 @@ package torrentio
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"regexp"
 	"rivulet_server/internal/providers"
@@ -85,18 +86,20 @@ func parseMetadata(rawTitle string) (int64, int, string) {
 	return bytes, seeds, quality
 }
 
-func (c *Client) Scrape(mediaType, imdbID string, season, episode int) ([]*providers.Stream, error) {
+func (c *Client) Scrape(mediaType, imdbID, rdKey string, season, episode int) ([]*providers.Stream, error) {
 	targetID := imdbID
 	if mediaType == "series" || mediaType == "show" {
 		targetID = fmt.Sprintf("%s:%d:%d", imdbID, season, episode)
 	}
 
-	url := fmt.Sprintf("%s/sort=size%%7Cqualityfilter=other,scr,cam,unknown/stream/%s/%s.json", 
+	url := fmt.Sprintf("%s/sort=size%%7Cqualityfilter=other,scr,cam,unknown%%7Cdebridoptions=nodownloadlinks/stream/%s/%s.json", 
 		c.BaseURL, mediaType, targetID)
 
 	if mediaType == "show" {
 		url = strings.Replace(url, "/stream/show/", "/stream/series/", 1)
 	}
+
+	log.Print(url)
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {

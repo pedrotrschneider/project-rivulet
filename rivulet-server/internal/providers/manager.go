@@ -16,7 +16,7 @@ func NewManager(scrapers ...Scraper) *Manager {
 }
 
 // ScrapeAll queries all providers in parallel and merges results
-func (m *Manager) ScrapeAll(mediaType, imdbID string, season, episode int) []*Stream {
+func (m *Manager) ScrapeAll(mediaType, imdbID, rdKey string, season, episode int) []*Stream {
 	var wg sync.WaitGroup
 	resultsChan := make(chan []*Stream, len(m.Scrapers))
 
@@ -27,7 +27,7 @@ func (m *Manager) ScrapeAll(mediaType, imdbID string, season, episode int) []*St
 			defer wg.Done()
 			
 			// Add timeout/context logic here in production
-			streams, err := scraper.Scrape(mediaType, imdbID, season, episode)
+			streams, err := scraper.Scrape(mediaType, imdbID, rdKey, season, episode)
 			if err != nil {
 				log.Printf("⚠️ [%s] Scrape failed: %v", scraper.Name(), err)
 				return

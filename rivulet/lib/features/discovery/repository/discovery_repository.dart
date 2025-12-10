@@ -48,6 +48,45 @@ class DiscoveryRepository {
   Future<void> addToLibrary(String id) async {
     await _dio.post('/library', data: {'external_id': id});
   }
+
+  Future<List<StreamResult>> scrapeStreams({
+    required String externalId,
+    required String type,
+    int? season,
+    int? episode,
+  }) async {
+    final response = await _dio.get(
+      '/stream/scrape',
+      queryParameters: {
+        'external_id': externalId,
+        'type': type,
+        if (season != null) 'season': season,
+        if (episode != null) 'episode': episode,
+      },
+    );
+    return (response.data as List)
+        .map((json) => StreamResult.fromJson(json))
+        .toList();
+  }
+
+  Future<Map<String, dynamic>> resolveStream({
+    required String magnet,
+    int? season,
+    int? episode,
+    int? fileIndex,
+  }) async {
+    // Backend expects POST JSON
+    final response = await _dio.post(
+      '/stream/resolve',
+      data: {
+        'magnet': magnet,
+        if (season != null) 'season': season,
+        if (episode != null) 'episode': episode,
+        if (fileIndex != null) 'file_index': fileIndex,
+      },
+    );
+    return response.data as Map<String, dynamic>;
+  }
 }
 
 @riverpod

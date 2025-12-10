@@ -14,5 +14,5 @@ type Stream struct {
 type Scraper interface {
 	Name() string
 	// Scrape fetches streams. type="movie"|"series", id="tt123", season/ep for shows
-	Scrape(mediaType, imdbID string, season, episode int) ([]*Stream, error)
+	Scrape(mediaType, imdbID, rdKey string, season, episode int) ([]*Stream, error)
 }

@@ -17,6 +17,7 @@ Dio dio(Ref ref) {
     ),
   );
 
+  dio.interceptors.add(LoggerInterceptor());
   dio.interceptors.add(AuthInterceptor(const FlutterSecureStorage()));
 
   return dio;
@@ -40,4 +41,25 @@ class AuthInterceptor extends Interceptor {
   }
 
   // TODO: Handle 401 Refresh Logic here later
+}
+
+class LoggerInterceptor extends Interceptor {
+  @override
+  void onError(DioException err, ErrorInterceptorHandler handler) {
+    print('--- API Error ---');
+    print('Request: ${err.requestOptions.method} ${err.requestOptions.path}');
+    print('Headers: ${err.requestOptions.headers}');
+    print('Query Query: ${err.requestOptions.queryParameters}');
+    print('Request Data: ${err.requestOptions.data}');
+
+    if (err.response != null) {
+      print('Response Status: ${err.response?.statusCode}');
+      print('Response Data: ${err.response?.data}');
+    } else {
+      print('Response: No response received');
+      print('Message: ${err.message}');
+    }
+    print('-----------------');
+    super.onError(err, handler);
+  }
 }

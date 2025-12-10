@@ -292,3 +292,105 @@ final class SeasonEpisodesFamily extends $Family
   @override
   String toString() => r'seasonEpisodesProvider';
 }
+
+@ProviderFor(streamScraper)
+const streamScraperProvider = StreamScraperFamily._();
+
+final class StreamScraperProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<List<StreamResult>>,
+          List<StreamResult>,
+          FutureOr<List<StreamResult>>
+        >
+    with
+        $FutureModifier<List<StreamResult>>,
+        $FutureProvider<List<StreamResult>> {
+  const StreamScraperProvider._({
+    required StreamScraperFamily super.from,
+    required ({String externalId, String type, int? season, int? episode})
+    super.argument,
+  }) : super(
+         retry: null,
+         name: r'streamScraperProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$streamScraperHash();
+
+  @override
+  String toString() {
+    return r'streamScraperProvider'
+        ''
+        '$argument';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<List<StreamResult>> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<List<StreamResult>> create(Ref ref) {
+    final argument =
+        this.argument
+            as ({String externalId, String type, int? season, int? episode});
+    return streamScraper(
+      ref,
+      externalId: argument.externalId,
+      type: argument.type,
+      season: argument.season,
+      episode: argument.episode,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is StreamScraperProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$streamScraperHash() => r'2dd1003d7d969737f2da955ce8557ab72ec9ec6d';
+
+final class StreamScraperFamily extends $Family
+    with
+        $FunctionalFamilyOverride<
+          FutureOr<List<StreamResult>>,
+          ({String externalId, String type, int? season, int? episode})
+        > {
+  const StreamScraperFamily._()
+    : super(
+        retry: null,
+        name: r'streamScraperProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  StreamScraperProvider call({
+    required String externalId,
+    required String type,
+    int? season,
+    int? episode,
+  }) => StreamScraperProvider._(
+    argument: (
+      externalId: externalId,
+      type: type,
+      season: season,
+      episode: episode,
+    ),
+    from: this,
+  );
+
+  @override
+  String toString() => r'streamScraperProvider';
+}

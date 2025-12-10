@@ -109,7 +109,14 @@ func findFileID(files []realdebrid.File, season, episode int, fileIndex *int) (s
 
 // POST /stream/resolve
 func ResolveStream(c echo.Context) error {
-	userToken := c.Request().Header.Get("X-RD-Token") // Or get from DB
+	userID := c.Get("user_id").(uuid.UUID)
+	keys, err := getUserKeys(userID)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "user not found"})
+	}
+	if keys.RD == "" {
+		return c.JSON(http.StatusConflict, map[string]string{"error": "RealDebrid API key not configured"})
+	}
 	
 	var req ResolveRequest
 	if err := c.Bind(&req); err != nil {
@@ -117,13 +124,13 @@ func ResolveStream(c echo.Context) error {
 	}
 
 	// 1. Add Magnet
-	torrentID, err := RdClient.AddMagnet(userToken, req.Magnet)
+	torrentID, err := RdClient.AddMagnet(keys.RD, req.Magnet)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed adding to cloud: " + err.Error()})
 	}
 
 	// 2. Check Info
-	info, err := RdClient.GetTorrentInfo(userToken, torrentID)
+	info, err := RdClient.GetTorrentInfo(keys.RD, torrentID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed checking info"})
 	}
@@ -137,44 +144,28 @@ func ResolveStream(c echo.Context) error {
 	// 4. Send Selection to RD (If needed)
 	// If status is "waiting_files_selection", we MUST select this specific file to start the process/get the link.
 	if info.Status == "waiting_files_selection" {
-		err = RdClient.SelectFiles(userToken, torrentID, targetFileID)
+		err = RdClient.SelectFiles(keys.RD, torrentID, targetFileID)
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed selecting file"})
 		}
 		// Refresh info to get the links
-		info, _ = RdClient.GetTorrentInfo(userToken, torrentID)
+		info, _ = RdClient.GetTorrentInfo(keys.RD, torrentID)
 	}
 
 	// 5. Find the Unrestrict Link
-	// info.Links contains ALL links in the torrent. We need the one that matches our selected file.
-	// RD's "Links" array usually maps 1:1 to the "selected files" order, but this is tricky.
-	// Safer approach: If status is 'downloaded', unrestrict the specific link.
 	
 	if info.Status == "downloaded" {
-		// Find the link that corresponds to our chosen file
-		// Note: This mapping is implicit in RD API. 
-		// If we selected only ONE file, info.Links should contain only THAT link (or few selected).
-		// We try to unrestrict the first link provided, assuming we selected only the one we wanted.
-		
-		// If multiple files were selected previously (by another app), info.Links might be huge.
-		// We assume for this "Resolve" flow we are isolating this file. 
-		// For simplicity in this MVP, we pick the first link if we just selected it.
-		
 		targetLink := ""
 		if len(info.Links) == 1 {
 			targetLink = info.Links[0]
 		} else {
-			// Fallback: Try to find a link that looks like the file? (Impossible, links are encoded)
-			// Better Strategy: Just grab the first one available if we just triggered selection.
-			// Ideally, you'd match info.Files[x].Selected == 1 to index.
-			// Let's grab the first one for now.
 			if len(info.Links) > 0 {
 				targetLink = info.Links[0]
 			}
 		}
 
 		if targetLink != "" {
-			unrestricted, err := RdClient.UnrestrictLink(userToken, targetLink)
+			unrestricted, err := RdClient.UnrestrictLink(keys.RD, targetLink)
 			if err == nil {
 				return c.JSON(http.StatusOK, map[string]interface{}{
 					"status":  "cached",
@@ -211,6 +202,15 @@ func getQualityRank(quality string) int {
 
 // GET /stream/scrape?external_id=imdb:tt123&type=movie&season=1&episode=1
 func ScrapeStreams(c echo.Context) error {
+	userID := c.Get("user_id").(uuid.UUID)
+	keys, err := getUserKeys(userID)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "user not found"})
+	}
+	if keys.RD == "" {
+		return c.JSON(http.StatusConflict, map[string]string{"error": "RealDebrid API key not configured"})
+	}
+
 	externalID := c.QueryParam("external_id") // e.g. "imdb:tt1375666"
 	mediaType := c.QueryParam("type")         // "movie" or "show"
 
@@ -229,7 +229,7 @@ func ScrapeStreams(c echo.Context) error {
 	episode, _ := strconv.Atoi(c.QueryParam("episode"))
 
 	// 1. Fetch Streams (Concurrent)
-	streams := ScraperManager.ScrapeAll(mediaType, imdbID, season, episode)
+	streams := ScraperManager.ScrapeAll(mediaType, imdbID, keys.RD, season, episode)
 
 	if len(streams) == 0 {
 		return c.JSON(http.StatusOK, []interface{}{})
@@ -244,12 +244,12 @@ func ScrapeStreams(c echo.Context) error {
 			return rankI > rankJ
 		}
 
-		// C. Seeders (High availability beats low)
+		// B. Seeders (High availability beats low)
 		if streams[i].Seeds != streams[j].Seeds {
 			return streams[i].Seeds > streams[j].Seeds
 		}
 
-		// D. Size (Bigger usually means better bitrate within same resolution)
+		// C. Size (Bigger usually means better bitrate within same resolution)
 		return streams[i].Size > streams[j].Size
 	})
 

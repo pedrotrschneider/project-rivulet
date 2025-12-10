@@ -46,3 +46,21 @@ Future<SeasonDetail> seasonEpisodes(
 }) {
   return ref.read(discoveryRepositoryProvider).getSeasonDetails(id, seasonNum);
 }
+
+@riverpod
+Future<List<StreamResult>> streamScraper(
+  Ref ref, {
+  required String externalId,
+  required String type,
+  int? season,
+  int? episode,
+}) {
+  return ref
+      .read(discoveryRepositoryProvider)
+      .scrapeStreams(
+        externalId: externalId,
+        type: type,
+        season: season,
+        episode: episode,
+      );
+}

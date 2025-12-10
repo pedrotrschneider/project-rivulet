@@ -59,6 +59,8 @@ class MediaDetail {
   final double? rating;
   final String type;
   final String? logo;
+  final String? imdbId;
+  final int? tmdbId;
 
   MediaDetail({
     required this.id,
@@ -70,6 +72,8 @@ class MediaDetail {
     this.rating,
     required this.type,
     this.logo,
+    this.imdbId,
+    this.tmdbId,
   });
 
   factory MediaDetail.fromJson(Map<String, dynamic> json) {
@@ -126,6 +130,8 @@ class MediaDetail {
       rating: rating,
       type: json['type'] as String? ?? 'movie',
       logo: json['logo'] as String?,
+      imdbId: json['imdbid'] as String?,
+      tmdbId: json['tmdbid'] as int?,
     );
   }
 }
@@ -214,6 +220,53 @@ class SeasonDetail {
               ?.map((e) => DiscoveryEpisode.fromJson(e))
               .toList() ??
           [],
+    );
+  }
+}
+
+class StreamResult {
+  final String title;
+  final int size;
+  final String hash;
+  final String magnet;
+  final int seeds;
+  final String quality;
+  final String source;
+  final int? fileIndex;
+
+  StreamResult({
+    required this.title,
+    required this.size,
+    required this.hash,
+    required this.magnet,
+    required this.seeds,
+    required this.quality,
+    required this.source,
+    this.fileIndex,
+  });
+
+  String get formattedSize {
+    if (size == 0) return '';
+    const suffixes = ["B", "KB", "MB", "GB", "TB"];
+    var i = 0;
+    double s = size.toDouble();
+    while (s >= 1024 && i < suffixes.length - 1) {
+      s /= 1024;
+      i++;
+    }
+    return '${s.toStringAsFixed(2)} ${suffixes[i]}';
+  }
+
+  factory StreamResult.fromJson(Map<String, dynamic> json) {
+    return StreamResult(
+      title: json['title'] as String? ?? 'Unknown',
+      size: json['size'] as int? ?? 0,
+      hash: json['hash'] as String? ?? '',
+      magnet: json['magnet'] as String? ?? '',
+      seeds: json['seeds'] as int? ?? 0,
+      quality: json['quality'] as String? ?? 'Unknown',
+      source: json['source'] as String? ?? 'Unknown',
+      fileIndex: json['file_index'] as int?,
     );
   }
 }

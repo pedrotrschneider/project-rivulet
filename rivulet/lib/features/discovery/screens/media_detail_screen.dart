@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rivulet/features/discovery/discovery_provider.dart';
 import 'package:rivulet/features/discovery/repository/discovery_repository.dart';
+import '../widgets/stream_selection_sheet.dart';
 
 class MediaDetailScreen extends ConsumerStatefulWidget {
   final String itemId;
@@ -303,6 +304,24 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
                                       ),
+                                      onTap: () {
+                                        // Open Stream Selection for Episode
+                                        showModalBottomSheet(
+                                          context: context,
+                                          isScrollControlled: true,
+                                          builder: (context) => StreamSelectionSheet(
+                                            externalId:
+                                                detail.imdbId ??
+                                                widget
+                                                    .itemId, // Use IMDB ID if available
+                                            title:
+                                                'S${_selectedSeason}E${episode.episodeNumber} - ${episode.name}',
+                                            type: 'show',
+                                            season: _selectedSeason,
+                                            episode: episode.episodeNumber,
+                                          ),
+                                        );
+                                      },
                                     );
                                   },
                                 );
@@ -326,6 +345,26 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
         error: (err, stack) => Center(child: Text('Error: $err')),
         loading: () => const Center(child: CircularProgressIndicator()),
       ),
+      floatingActionButton: detailAsync.asData?.value.type == 'movie'
+          ? FloatingActionButton.extended(
+              onPressed: () {
+                final detail = detailAsync.asData!.value;
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (context) => StreamSelectionSheet(
+                    externalId:
+                        detail.imdbId ??
+                        detail.id, // Prefer IMDB ID if available
+                    title: detail.title,
+                    type: 'movie',
+                  ),
+                );
+              },
+              icon: const Icon(Icons.play_arrow),
+              label: const Text('Play'),
+            )
+          : null,
     );
   }
 }
