@@ -36,11 +36,12 @@ dependencies:
   cupertino_icons: ^1.0.8
   flutter_riverpod: ^3.0.3
   dio: ^5.7.0
-  fvp: ^0.35.1
-  video_player: ^2.0.0
+  fvp: ^0.35.0
+  video_player: ^2.10.0
   flutter_secure_storage: ^4.2.1
   shared_preferences: ^2.5.4
   riverpod_annotation: ^3.0.3
+  chewie: ^1.13.0
 
 dev_dependencies:
   flutter_test:
