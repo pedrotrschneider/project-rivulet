@@ -2,15 +2,19 @@ package api
 
 import (
 	"net/http"
+	"rivulet_server/internal/db"
+	"rivulet_server/internal/models"
 	"rivulet_server/internal/providers"
 	"rivulet_server/internal/providers/mdblist"
 	"rivulet_server/internal/providers/realdebrid"
 	"rivulet_server/internal/providers/tmdb"
 	"rivulet_server/internal/providers/torrentio"
+	"strings"
 
 	"sort"
 	"strconv"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
 
@@ -28,8 +32,8 @@ func InitProviders() {
 
 	// Initialize scrapers
 	ScraperManager = providers.NewManager(
-        torrentio.NewClient(),
-    )
+		torrentio.NewClient(),
+	)
 }
 
 // --- Handlers ---
@@ -40,20 +44,28 @@ type ResolveRequest struct {
 
 // POST /stream/resolve
 func ResolveStream(c echo.Context) error {
-	userToken := c.Request().Header.Get("X-RD-Token")
+	userID := c.Get("user_id").(uuid.UUID)
+	keys, err := getUserKeys(userID)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "user not found"})
+	}
+	if keys.RD == "" {
+		return c.JSON(http.StatusConflict, map[string]string{"error": "RealDebrid API key not configured"})
+	}
+
 	var req ResolveRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request"})
 	}
 
 	// 1. Add Magnet
-	torrentID, err := RdClient.AddMagnet(userToken, req.Magnet)
+	torrentID, err := RdClient.AddMagnet(keys.RD, req.Magnet)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed adding to cloud: " + err.Error()})
 	}
 
 	// 2. Check Info immediately
-	info, err := RdClient.GetTorrentInfo(userToken, torrentID)
+	info, err := RdClient.GetTorrentInfo(keys.RD, torrentID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed checking info"})
 	}
@@ -61,12 +73,12 @@ func ResolveStream(c echo.Context) error {
 	// 3. Handle "Waiting for Selection"
 	// If it's a new magnet, RD pauses and asks "Which files?". We must say "All" or smart select.
 	if info.Status == "waiting_files_selection" {
-		err = RdClient.SelectFiles(userToken, torrentID, "all")
+		err = RdClient.SelectFiles(keys.RD, torrentID, "all")
 		if err != nil {
-             return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed selecting files"})
-        }
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed selecting files"})
+		}
 		// Re-fetch info to see the new status
-		info, _ = RdClient.GetTorrentInfo(userToken, torrentID)
+		info, _ = RdClient.GetTorrentInfo(keys.RD, torrentID)
 	}
 
 	// 4. Decision Time
@@ -75,11 +87,11 @@ func ResolveStream(c echo.Context) error {
 		// Usually the largest file is the movie.
 		// For now, we take the first link.
 		if len(info.Links) > 0 {
-			unrestricted, err := RdClient.UnrestrictLink(userToken, info.Links[0])
+			unrestricted, err := RdClient.UnrestrictLink(keys.RD, info.Links[0])
 			if err == nil {
 				return c.JSON(http.StatusOK, map[string]interface{}{
-					"status": "cached",
-					"url":    unrestricted.Download,
+					"status":  "cached",
+					"url":     unrestricted.Download,
 					"file_id": torrentID,
 				})
 			}
@@ -88,7 +100,7 @@ func ResolveStream(c echo.Context) error {
 
 	// If we are here, it is NOT cached (it's "downloading" or "queued").
 	return c.JSON(http.StatusOK, map[string]string{
-		"status": "downloading",
+		"status":  "downloading",
 		"message": "Item added to cloud. Download in progress.",
 		"file_id": torrentID,
 	})
@@ -129,21 +141,25 @@ func ScrapeStreams(c echo.Context) error {
 }
 
 func Search(c echo.Context) error {
-	apiKey := c.Request().Header.Get("X-TMDB-Key")
-	if apiKey == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "missing X-TMDB-Key header"})
+	userID := c.Get("user_id").(uuid.UUID)
+	keys, err := getUserKeys(userID)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "user not found"})
+	}
+	if keys.TMDB == "" {
+		return c.JSON(http.StatusConflict, map[string]string{"error": "TMDB API key not configured"})
 	}
 
 	query := c.QueryParam("q")
 	if query == "" {
-		results, err := TmdbClient.GetTrending(apiKey)
+		results, err := TmdbClient.GetTrending(keys.TMDB)
 		if err != nil {
 			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		}
 		return c.JSON(http.StatusOK, results)
 	}
 
-	results, err := TmdbClient.Search(apiKey, query)
+	results, err := TmdbClient.Search(keys.TMDB, query)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
@@ -152,33 +168,128 @@ func Search(c echo.Context) error {
 }
 
 func GetDetails(c echo.Context) error {
-	apiKey := c.Request().Header.Get("X-MDBList-Key")
-	if apiKey == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "missing X-MDBList-Key header"})
+	userID := c.Get("user_id").(uuid.UUID)
+	keys, err := getUserKeys(userID)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "user not found"})
+	}
+	if keys.MDBList == "" {
+		return c.JSON(http.StatusConflict, map[string]string{"error": "MDBList API key not configured"})
+	}
+	if keys.TMDB == "" {
+		return c.JSON(http.StatusConflict, map[string]string{"error": "TMDB API key not configured"})
 	}
 
 	id := c.Param("id")
-	
-	// 🔧 FIX: Get type from query params (e.g. ?type=tv)
 	mediaType := c.QueryParam("type")
 
 	// Pass it to the client
-	details, err := MdbClient.GetDetails(apiKey, id, mediaType)
+	details, err := MdbClient.GetDetails(keys.MDBList, id, mediaType)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}
+
+	if details.TmdbID != 0 {
+		// Determine type for TMDB call
+		tmType := "movie"
+		if mediaType == "tv" || mediaType == "show" || mediaType == "series" {
+			tmType = "tv"
+		}
+
+		// If type wasn't passed but MDBList returned "show", use that
+		if details.Type == "show" || details.Type == "series" {
+			tmType = "tv"
+		}
+
+		logoURL, err := TmdbClient.GetLogo(keys.TMDB, details.TmdbID, tmType)
+		if err == nil {
+			details.Logo = logoURL
+		}
+	}
+
 	return c.JSON(http.StatusOK, details)
+}
+
+// GET /discover/tv/:id/seasons
+func GetShowSeasons(c echo.Context) error {
+	// 1. Get Keys
+	userID := c.Get("user_id").(uuid.UUID)
+	keys, err := getUserKeys(userID)
+	if err != nil || keys.TMDB == "" {
+		return c.JSON(http.StatusConflict, map[string]string{"error": "TMDB API key not configured"})
+	}
+
+	// 2. Parse ID
+	idParam := c.Param("id") // Expecting TMDB ID (e.g., "85937")
+	tmdbID, err := strconv.Atoi(idParam)
+	if err != nil {
+		// If it's "tm85937", strip prefix
+		if len(idParam) > 2 && idParam[:2] == "tm" {
+			tmdbID, _ = strconv.Atoi(idParam[2:])
+		} else {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid id format"})
+		}
+	}
+
+	// 3. Fetch Show Details (contains Season List)
+	show, err := TmdbClient.GetTVShowDetails(keys.TMDB, tmdbID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	// 4. Return just the seasons list
+	// Normalize posters here if Client doesn't do it for the summary list
+	for i := range show.Seasons {
+		if show.Seasons[i].PosterPath != "" && !strings.HasPrefix(show.Seasons[i].PosterPath, "http") {
+			show.Seasons[i].PosterPath = "https://image.tmdb.org/t/p/w500" + show.Seasons[i].PosterPath
+		}
+	}
+
+	return c.JSON(http.StatusOK, show.Seasons)
+}
+
+// GET /discover/tv/:id/season/:num
+func GetSeasonEpisodes(c echo.Context) error {
+	// 1. Get Keys
+	userID := c.Get("user_id").(uuid.UUID)
+	keys, err := getUserKeys(userID)
+	if err != nil || keys.TMDB == "" {
+		return c.JSON(http.StatusConflict, map[string]string{"error": "TMDB API key not configured"})
+	}
+
+	// 2. Parse Params
+	idParam := c.Param("id")
+	seasonParam := c.Param("num")
+	
+	tmdbID, _ := strconv.Atoi(idParam)
+	if len(idParam) > 2 && idParam[:2] == "tm" {
+		tmdbID, _ = strconv.Atoi(idParam[2:])
+	}
+	
+	seasonNum, err := strconv.Atoi(seasonParam)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid season number"})
+	}
+
+	// 3. Fetch Season Details
+	season, err := TmdbClient.GetSeasonDetails(keys.TMDB, tmdbID, seasonNum)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	return c.JSON(http.StatusOK, season)
 }
 
 // Proxies the RD Unrestrict call using the User's stored token
 func Unrestrict(c echo.Context) error {
-	// 1. Get the user's encrypted RD token from DB (Mocked for now)
-	// userID := c.Get("user_id").(uuid.UUID)
-	// userToken := db.GetRDToken(userID)
-
-	// For dev testing, we'll accept it in the header temporarily,
-	// or you can hardcode your own token to test.
-	userToken := c.Request().Header.Get("X-RD-Token")
+	userID := c.Get("user_id").(uuid.UUID)
+	keys, err := getUserKeys(userID)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "user not found"})
+	}
+	if keys.RD == "" {
+		return c.JSON(http.StatusConflict, map[string]string{"error": "RealDebrid API key not configured"})
+	}
 
 	type Request struct {
 		Link string `json:"link"`
@@ -188,10 +299,37 @@ func Unrestrict(c echo.Context) error {
 		return err
 	}
 
-	link, err := RdClient.UnrestrictLink(userToken, req.Link)
+	link, err := RdClient.UnrestrictLink(keys.RD, req.Link)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 	}
 
 	return c.JSON(http.StatusOK, link)
+}
+
+func GetSystemInfo(c echo.Context) error {
+	return c.JSON(http.StatusOK, map[string]string{
+		"version": "1.0.0",
+	})
+}
+
+// Helper struct
+type UserKeys struct {
+	RD      string
+	TMDB    string
+	MDBList string
+}
+
+func getUserKeys(userID uuid.UUID) (*UserKeys, error) {
+	var acc models.Account
+	// Select only the needed columns for speed
+	err := db.DB.Select("real_debrid_key, tm_db_key, mdb_list_key").First(&acc, userID).Error
+	if err != nil {
+		return nil, err
+	}
+	return &UserKeys{
+		RD:      acc.RealDebridKey,
+		TMDB:    acc.TMDbKey,
+		MDBList: acc.MDBListKey,
+	}, nil
 }

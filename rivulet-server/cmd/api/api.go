@@ -15,6 +15,7 @@ func Start() {
 	e.Use(middleware.CORS())
 
 	// Public Routes
+	e.GET("/api/v1/system/info", GetSystemInfo)
 	e.POST("/api/v1/auth/register", auth.Register) // Temp helper
 	e.POST("/api/v1/auth/login", auth.Login)
 	e.POST("/api/v1/auth/verify", auth.Verify)
@@ -36,9 +37,15 @@ func Start() {
 		})
 	})
 
+	// Config
+	v1.GET("/user/config", GetUserConfig)
+	v1.POST("/user/config", UpdateUserConfig)
+
 	// Discovery
 	v1.GET("/discover/search", Search)
 	v1.GET("/discover/details/:id", GetDetails)
+	v1.GET("/discover/tv/:id/seasons", GetShowSeasons)
+	v1.GET("/discover/tv/:id/season/:num", GetSeasonEpisodes)
 
 	// Real Debrid
 	v1.POST("/rd/unrestrict", Unrestrict)

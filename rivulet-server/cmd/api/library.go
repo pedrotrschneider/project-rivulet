@@ -34,10 +34,18 @@ func getActiveProfile(c echo.Context, accountID uuid.UUID) (models.Profile, erro
 // POST /library
 func AddToLibrary(c echo.Context) error {
 	// 1. Get Inputs
-	mdbApiKey := c.Request().Header.Get("X-MDBList-Key") // Or use server config
-	tmdbApiKey := c.Request().Header.Get("X-TMDB-Key")
 	userID := c.Get("user_id").(uuid.UUID)
-	
+	keys, err := getUserKeys(userID)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "user not found"})
+	}
+	if keys.MDBList == "" {
+		return c.JSON(http.StatusConflict, map[string]string{"error": "MDBList API key not configured"})
+	}
+	if keys.TMDB == "" {
+		return c.JSON(http.StatusConflict, map[string]string{"error": "TMDB API key not configured"})
+	}
+
 	profile, err := getActiveProfile(c, userID)
 	if err != nil {
 		return c.JSON(http.StatusForbidden, map[string]string{"error": "no profile found"})
@@ -52,7 +60,7 @@ func AddToLibrary(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
 
-	err = services.AddToLibrary(MdbClient, TmdbClient, mdbApiKey, tmdbApiKey, req.ExternalID, req.MediaType, profile.ID)
+	err = services.AddToLibrary(MdbClient, TmdbClient, keys.MDBList, keys.TMDB, req.ExternalID, req.MediaType, profile.ID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 	}

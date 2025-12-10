@@ -1,21 +1,21 @@
 meta {
   name: Discover Details
   type: http
-  seq: 8
+  seq: 11
 }
 
 get {
-  url: {{baseUrl}}/api/v1/discover/details/:id?type=movie
+  url: {{baseUrl}}/api/v1/discover/details/:id?type=tv
   body: none
   auth: inherit
 }
 
 params:query {
-  type: movie
+  type: tv
 }
 
 params:path {
-  id: 1311031
+  id: 85937
 }
 
 headers {

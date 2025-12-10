@@ -46,6 +46,7 @@ type MediaDetail struct {
 	Type        string `json:"type"`
 	Poster      string `json:"poster"`
 	Backdrop    string `json:"backdrop"`
+	Logo        string `json:"logo"`
 	Ratings     []struct {
 		Source string `json:"source"`
 		Value  any    `json:"value"`

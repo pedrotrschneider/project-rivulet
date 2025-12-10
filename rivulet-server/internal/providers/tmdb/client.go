@@ -65,6 +65,27 @@ type TVShowDetails struct {
 	} `json:"seasons"`
 }
 
+type SeasonDetails struct {
+	ID           int       `json:"id"`
+	AirDate      string    `json:"air_date"`
+	Name         string    `json:"name"`
+	Overview     string    `json:"overview"`
+	PosterPath   string    `json:"poster_path"`
+	SeasonNumber int       `json:"season_number"`
+	Episodes     []Episode `json:"episodes"`
+}
+
+type Episode struct {
+	AirDate        string  `json:"air_date"`
+	EpisodeNumber  int     `json:"episode_number"`
+	ID             int     `json:"id"`
+	Name           string  `json:"name"`
+	Overview       string  `json:"overview"`
+	StillPath      string  `json:"still_path"`
+	VoteAverage    float64 `json:"vote_average"`
+	Runtime        int     `json:"runtime"`
+}
+
 // --- Methods ---
 
 func (c *Client) Search(apiKey, query string) ([]Result, error) {
@@ -168,6 +189,34 @@ func (c *Client) GetTVShowDetails(apiKey string, tmdbID int) (*TVShowDetails, er
 	var details TVShowDetails
 	if err := json.NewDecoder(resp.Body).Decode(&details); err != nil {
 		return nil, err
+	}
+
+	return &details, nil
+}
+
+// GetSeasonDetails fetches all episodes for a specific season
+func (c *Client) GetSeasonDetails(apiKey string, tmdbID, seasonNum int) (*SeasonDetails, error) {
+	u := fmt.Sprintf("%s/tv/%d/season/%d?api_key=%s&language=en-US", BaseURL, tmdbID, seasonNum, apiKey)
+
+	resp, err := c.HttpClient.Get(u)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var details SeasonDetails
+	if err := json.NewDecoder(resp.Body).Decode(&details); err != nil {
+		return nil, err
+	}
+
+	// Normalize Images
+	if details.PosterPath != "" {
+		details.PosterPath = ImageBase + details.PosterPath
+	}
+	for i := range details.Episodes {
+		if details.Episodes[i].StillPath != "" {
+			details.Episodes[i].StillPath = ImageBase + details.Episodes[i].StillPath
+		}
 	}
 
 	return &details, nil

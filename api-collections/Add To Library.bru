@@ -1,7 +1,7 @@
 meta {
   name: Add To Library
   type: http
-  seq: 12
+  seq: 16
 }
 
 post {
@@ -13,12 +13,12 @@ post {
 headers {
   X-MDBList-Key: {{mdblistApiKey}}
   Content-Type: application/json
-  X-MDBList-Key: {{tmdbApiKey}}
+  X-TMDB-Key: {{tmdbApiKey}}
 }
 
 body:json {
   {
-    "external_id": "tt32820897",
+    "external_id": "tt0944947",
     "media_type": "show"
   }
 }

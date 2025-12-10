@@ -18,9 +18,13 @@ type Account struct {
 	Base
 	Email         string `gorm:"uniqueIndex;not null"`
 	PasswordHash  string `gorm:"not null"`
-	RealDebridKey string
 	IsAdmin       bool `gorm:"default:false"`
 	Profiles      []Profile
+
+	// API Keys
+	RealDebridKey string 
+	TMDbKey       string 
+	MDBListKey    string
 
 	// OTP Logic (Stored in DB for simplicity)
 	CurrentOtp   string    `json:"-"`

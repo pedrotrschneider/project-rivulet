@@ -1,0 +1,20 @@
+meta {
+  name: Discover Details Seasons
+  type: http
+  seq: 12
+}
+
+get {
+  url: {{baseUrl}}/api/v1/discover/tv/:id/seasons
+  body: none
+  auth: inherit
+}
+
+params:path {
+  id: 
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

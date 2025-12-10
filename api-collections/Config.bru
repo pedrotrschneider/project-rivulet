@@ -1,11 +1,11 @@
 meta {
-  name: Add Profile
+  name: Config
   type: http
-  seq: 7
+  seq: 5
 }
 
 post {
-  url: {{baseUrl}}/api/v1/profiles
+  url: {{baseUrl}}/api/v1/user/config
   body: json
   auth: inherit
 }
@@ -16,7 +16,9 @@ headers {
 
 body:json {
   {
-    "name": "Kids"
+    "real_debrid_key": "{{rdApiKey}}",
+    "tmdb_key": "{{tmdbApiKey}}",
+    "mdblist_key": "{{mdblistApiKey}}"
   }
 }
 
