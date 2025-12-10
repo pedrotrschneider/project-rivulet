@@ -44,18 +44,20 @@ type UnrestrictResponse struct {
 	Download string `json:"download"` // The Direct MP4 Link
 }
 
+type File struct {
+	ID       int    `json:"id"`
+	Path     string `json:"path"`
+	Bytes    int64  `json:"bytes"`
+	Selected int    `json:"selected"`
+}
+
 type TorrentInfo struct {
 	ID       string `json:"id"`
 	Filename string `json:"filename"`
-	Status   string `json:"status"`   // "downloaded", "downloading", "magnet_conversion"
-	Progress int    `json:"progress"` // 100 = cached
-	Links    []string `json:"links"`  // The hoster links
-	Files    []struct {
-		ID       int    `json:"id"`
-		Path     string `json:"path"`
-		Bytes    int64  `json:"bytes"`
-		Selected int    `json:"selected"` // 1 = selected
-	} `json:"files"`
+	Status   string `json:"status"`
+	Progress int    `json:"progress"`
+	Links    []string `json:"links"`
+	Files    []File   `json:"files"`
 }
 
 // --- Methods ---

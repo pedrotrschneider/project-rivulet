@@ -1,0 +1,23 @@
+meta {
+  name: Scrape Torrents Show
+  type: http
+  seq: 15
+}
+
+get {
+  url: {{baseUrl}}/api/v1/stream/scrape?external_id=imdb:tt9335498&type=show&season=2&episode=3
+  body: none
+  auth: inherit
+}
+
+params:query {
+  external_id: imdb:tt9335498
+  type: show
+  season: 2
+  episode: 3
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

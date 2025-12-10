@@ -8,6 +8,7 @@ type Stream struct {
 	Quality     string `json:"quality"` // "4k", "1080p"
 	Seeds       int    `json:"seeds"`
 	Source      string `json:"source"` // "torrentio", "knightcrawler"
+	FileIndex   *int   `json:"file_index,omitempty"`
 }
 
 type Scraper interface {

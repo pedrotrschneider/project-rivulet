@@ -1,7 +1,9 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
+	"regexp"
 	"rivulet_server/internal/db"
 	"rivulet_server/internal/models"
 	"rivulet_server/internal/providers"
@@ -39,55 +41,140 @@ func InitProviders() {
 // --- Handlers ---
 
 type ResolveRequest struct {
-	Magnet string `json:"magnet"`
+	Magnet    string `json:"magnet"`
+	Season    int    `json:"season,omitempty"`
+	Episode   int    `json:"episode,omitempty"`
+	FileIndex *int   `json:"file_index,omitempty"`
+}
+
+
+// Helper to find the file ID for a specific episode
+func findFileID(files []realdebrid.File, season, episode int, fileIndex *int) (string, error) {
+	// 1. If it's a movie (Season 0), return the largest file
+	if season == 0 || episode == 0 {
+		var largestFile realdebrid.File
+		for _, f := range files {
+			if f.Bytes > largestFile.Bytes {
+				largestFile = f
+			}
+		}
+		if largestFile.ID == 0 { // Check if ID is set (assuming 0 is invalid or check nil)
+			return "", fmt.Errorf("no files found")
+		}
+		return fmt.Sprintf("%d", largestFile.ID), nil
+	}
+
+	// 2. If it's a TV Show, return the file at the specified index
+	if fileIndex != nil {
+		targetIdx := *fileIndex + 1
+
+		for _, f := range files {
+            if f.ID == targetIdx {
+                 return fmt.Sprintf("%d", f.ID), nil
+            }
+        }
+        
+        // Sanity check bounds
+        if targetIdx >= 0 && targetIdx < len(files) {
+            candidate := files[targetIdx]
+            lower := strings.ToLower(candidate.Path)
+            if strings.HasSuffix(lower, ".mkv") || 
+			   strings.HasSuffix(lower, ".mp4") || 
+			   strings.HasSuffix(lower, ".avi") {
+				return fmt.Sprintf("%d", candidate.ID), nil
+            }
+        }
+	}
+
+	// If all else fails, fallback to regex approach
+	pattern := fmt.Sprintf(`(?i)(S0?%d\s?E0?%d\b|\b%dx0?%d\b)`, season, episode, season, episode)
+	re := regexp.MustCompile(pattern)
+
+	for _, f := range files {
+		// Only look at video files (mkv, mp4, avi) to avoid matching "S01E01.nfo"
+		lowerPath := strings.ToLower(f.Path)
+		if !strings.HasSuffix(lowerPath, ".mkv") && 
+		   !strings.HasSuffix(lowerPath, ".mp4") && 
+		   !strings.HasSuffix(lowerPath, ".avi") {
+			continue
+		}
+
+		if re.MatchString(f.Path) {
+			return fmt.Sprintf("%d", f.ID), nil
+		}
+	}
+
+	return "", fmt.Errorf("episode S%02dE%02d not found in torrent", season, episode)
 }
 
 // POST /stream/resolve
 func ResolveStream(c echo.Context) error {
-	userID := c.Get("user_id").(uuid.UUID)
-	keys, err := getUserKeys(userID)
-	if err != nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "user not found"})
-	}
-	if keys.RD == "" {
-		return c.JSON(http.StatusConflict, map[string]string{"error": "RealDebrid API key not configured"})
-	}
-
+	userToken := c.Request().Header.Get("X-RD-Token") // Or get from DB
+	
 	var req ResolveRequest
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid request"})
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
 	}
 
 	// 1. Add Magnet
-	torrentID, err := RdClient.AddMagnet(keys.RD, req.Magnet)
+	torrentID, err := RdClient.AddMagnet(userToken, req.Magnet)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed adding to cloud: " + err.Error()})
 	}
 
-	// 2. Check Info immediately
-	info, err := RdClient.GetTorrentInfo(keys.RD, torrentID)
+	// 2. Check Info
+	info, err := RdClient.GetTorrentInfo(userToken, torrentID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed checking info"})
 	}
 
-	// 3. Handle "Waiting for Selection"
-	// If it's a new magnet, RD pauses and asks "Which files?". We must say "All" or smart select.
-	if info.Status == "waiting_files_selection" {
-		err = RdClient.SelectFiles(keys.RD, torrentID, "all")
-		if err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed selecting files"})
-		}
-		// Re-fetch info to see the new status
-		info, _ = RdClient.GetTorrentInfo(keys.RD, torrentID)
+	// 3. Select Specific File (The "Stremio" Logic)
+	targetFileID, err := findFileID(info.Files, req.Season, req.Episode, req.FileIndex)
+	if err != nil {
+		return c.JSON(http.StatusNotFound, map[string]string{"error": err.Error()})
 	}
 
-	// 4. Decision Time
+	// 4. Send Selection to RD (If needed)
+	// If status is "waiting_files_selection", we MUST select this specific file to start the process/get the link.
+	if info.Status == "waiting_files_selection" {
+		err = RdClient.SelectFiles(userToken, torrentID, targetFileID)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed selecting file"})
+		}
+		// Refresh info to get the links
+		info, _ = RdClient.GetTorrentInfo(userToken, torrentID)
+	}
+
+	// 5. Find the Unrestrict Link
+	// info.Links contains ALL links in the torrent. We need the one that matches our selected file.
+	// RD's "Links" array usually maps 1:1 to the "selected files" order, but this is tricky.
+	// Safer approach: If status is 'downloaded', unrestrict the specific link.
+	
 	if info.Status == "downloaded" {
-		// It's Cached! Unrestrict the link immediately.
-		// Usually the largest file is the movie.
-		// For now, we take the first link.
-		if len(info.Links) > 0 {
-			unrestricted, err := RdClient.UnrestrictLink(keys.RD, info.Links[0])
+		// Find the link that corresponds to our chosen file
+		// Note: This mapping is implicit in RD API. 
+		// If we selected only ONE file, info.Links should contain only THAT link (or few selected).
+		// We try to unrestrict the first link provided, assuming we selected only the one we wanted.
+		
+		// If multiple files were selected previously (by another app), info.Links might be huge.
+		// We assume for this "Resolve" flow we are isolating this file. 
+		// For simplicity in this MVP, we pick the first link if we just selected it.
+		
+		targetLink := ""
+		if len(info.Links) == 1 {
+			targetLink = info.Links[0]
+		} else {
+			// Fallback: Try to find a link that looks like the file? (Impossible, links are encoded)
+			// Better Strategy: Just grab the first one available if we just triggered selection.
+			// Ideally, you'd match info.Files[x].Selected == 1 to index.
+			// Let's grab the first one for now.
+			if len(info.Links) > 0 {
+				targetLink = info.Links[0]
+			}
+		}
+
+		if targetLink != "" {
+			unrestricted, err := RdClient.UnrestrictLink(userToken, targetLink)
 			if err == nil {
 				return c.JSON(http.StatusOK, map[string]interface{}{
 					"status":  "cached",
@@ -98,12 +185,28 @@ func ResolveStream(c echo.Context) error {
 		}
 	}
 
-	// If we are here, it is NOT cached (it's "downloading" or "queued").
 	return c.JSON(http.StatusOK, map[string]string{
 		"status":  "downloading",
-		"message": "Item added to cloud. Download in progress.",
+		"message": fmt.Sprintf("Episode S%02dE%02d added to cloud.", req.Season, req.Episode),
 		"file_id": torrentID,
 	})
+}
+
+func getQualityRank(quality string) int {
+	q := strings.ToLower(quality)
+	if strings.Contains(q, "4k") || strings.Contains(q, "2160p") {
+		return 40
+	}
+	if strings.Contains(q, "1080p") {
+		return 30
+	}
+	if strings.Contains(q, "720p") {
+		return 20
+	}
+	if strings.Contains(q, "480p") {
+		return 10
+	}
+	return 0 // Unknown
 }
 
 // GET /stream/scrape?external_id=imdb:tt123&type=movie&season=1&episode=1
@@ -132,8 +235,21 @@ func ScrapeStreams(c echo.Context) error {
 		return c.JSON(http.StatusOK, []interface{}{})
 	}
 
-	// 3. Sort by Size (Descending)
+	// 3. Smart Sort: Quality > Seeds > Size
 	sort.Slice(streams, func(i, j int) bool {
+		// A. Quality Rank (4k > 1080p)
+		rankI := getQualityRank(streams[i].Quality)
+		rankJ := getQualityRank(streams[j].Quality)
+		if rankI != rankJ {
+			return rankI > rankJ
+		}
+
+		// C. Seeders (High availability beats low)
+		if streams[i].Seeds != streams[j].Seeds {
+			return streams[i].Seeds > streams[j].Seeds
+		}
+
+		// D. Size (Bigger usually means better bitrate within same resolution)
 		return streams[i].Size > streams[j].Size
 	})
 

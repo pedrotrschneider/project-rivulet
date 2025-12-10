@@ -123,23 +123,23 @@ func (c *Client) Scrape(mediaType, imdbID string, season, episode int) ([]*provi
 
 	var streams []*providers.Stream
 	for _, item := range result.Streams {
-		// Parse the messy title string
 		size, seeds, quality := parseMetadata(item.Title)
-		
-		// Clean Title (First line is usually the release name)
 		cleanTitle := strings.Split(item.Title, "\n")[0]
-
-		// Construct Magnet
 		magnet := fmt.Sprintf("magnet:?xt=urn:btih:%s", item.InfoHash)
 
+		var fIdx *int
+		idx := item.FileIdx
+		fIdx = &idx
+
 		streams = append(streams, &providers.Stream{
-			Title:    cleanTitle,
-			Size:     size,
-			Hash:     item.InfoHash,
-			Magnet:   magnet, // ✅ Now populated
-			Seeds:    seeds,  // ✅ Now populated
-			Quality:  quality,// ✅ Now populated
-			Source:   "Torrentio",
+			Title:     cleanTitle,
+			Size:      size,
+			Hash:      item.InfoHash,
+			Magnet:    magnet,
+			Seeds:     seeds,
+			Quality:   quality,
+			Source:    "Torrentio",
+			FileIndex: fIdx,
 		})
 	}
 

@@ -5,17 +5,13 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}/api/v1/discover/search?q=inception
+  url: {{baseUrl}}/api/v1/discover/search?q="demon slayer"
   body: none
   auth: inherit
 }
 
 params:query {
-  q: inception
-}
-
-headers {
-  X-TMDB-Key: {{tmdbApiKey}}
+  q: "demon slayer"
 }
 
 settings {

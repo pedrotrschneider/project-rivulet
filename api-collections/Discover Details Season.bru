@@ -5,12 +5,13 @@ meta {
 }
 
 get {
-  url: {{baseUrl}}/api/v1/discover/tv/:id/seasons
+  url: {{baseUrl}}/api/v1/discover/tv/:id/season/:n
   body: none
   auth: inherit
 }
 
 params:path {
+  n: 1
   id: 85937
 }
 
