@@ -50,6 +50,10 @@ class AuthRepository {
   Future<void> logout() async {
     await deleteToken();
   }
+
+  Future<void> checkHealth() async {
+    await _dio.get('/health');
+  }
 }
 
 @riverpod

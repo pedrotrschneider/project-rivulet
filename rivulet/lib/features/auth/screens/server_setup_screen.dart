@@ -27,7 +27,12 @@ class _ServerSetupScreenState extends ConsumerState<ServerSetupScreen> {
     try {
       // Temporary Dio to test connection
       final dio = Dio(
-        BaseOptions(baseUrl: url, connectTimeout: const Duration(seconds: 5)),
+        BaseOptions(
+          baseUrl: (url.isNotEmpty)
+              ? '${url.endsWith('/') ? url.substring(0, url.length - 1) : url}/api/v1'
+              : '',
+          connectTimeout: const Duration(seconds: 5),
+        ),
       );
 
       final response = await dio.get('/system/info');

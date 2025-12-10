@@ -11,7 +11,9 @@ Dio dio(Ref ref) {
   final serverUrl = ref.watch(serverUrlProvider);
   final dio = Dio(
     BaseOptions(
-      baseUrl: serverUrl ?? '',
+      baseUrl: (serverUrl != null && serverUrl.isNotEmpty)
+          ? '${serverUrl.endsWith('/') ? serverUrl.substring(0, serverUrl.length - 1) : serverUrl}/api/v1'
+          : '',
       connectTimeout: const Duration(seconds: 5),
       receiveTimeout: const Duration(seconds: 10),
     ),

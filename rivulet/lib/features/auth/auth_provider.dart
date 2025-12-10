@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'auth_repository.dart';
@@ -10,10 +11,6 @@ class ServerUrl extends _$ServerUrl {
 
   @override
   String? build() {
-    // We load initial value synchronously if possible, or handle loading state in UI
-    // For simplicity, we'll start with null and let a simpler provider read prefs
-    // Actually, let's use a FutureProvider wrapper or just init here if we had prefs injected.
-    // For now, simple state.
     return null;
   }
 
@@ -37,19 +34,50 @@ class ServerUrl extends _$ServerUrl {
 
 @riverpod
 class Auth extends _$Auth {
+  Timer? _timer;
+
   @override
   bool build() {
+    ref.onDispose(() {
+      _timer?.cancel();
+    });
     return false;
   }
 
   Future<void> checkStatus() async {
     final repo = ref.read(authRepositoryProvider);
     final token = await repo.getToken();
-    state = token != null;
+
+    if (token != null) {
+      state = true;
+      // Validate session immediately
+      try {
+        await repo.checkHealth();
+        _startValidationTimer();
+      } catch (e) {
+        print('Session invalid on startup: $e');
+        await logout();
+      }
+    } else {
+      state = false;
+    }
+  }
+
+  void _startValidationTimer() {
+    _timer?.cancel();
+    _timer = Timer.periodic(const Duration(seconds: 10), (_) async {
+      try {
+        final repo = ref.read(authRepositoryProvider);
+        await repo.checkHealth();
+      } catch (e) {
+        print('Session expired during validation: $e');
+        _timer?.cancel();
+        await logout();
+      }
+    });
   }
 
   Future<void> login(String email, String password) async {
-    // This returns { otp_required: true } or { token: ... }
     final repo = ref.read(authRepositoryProvider);
     final result = await repo.login(email, password);
     if (result['access_token'] != null) {
@@ -58,15 +86,14 @@ class Auth extends _$Auth {
         refreshToken: result['refresh_token'],
       );
       state = true;
+      _startValidationTimer();
     }
-    // If otp_required, we don't update state yet, UI handles the flow
   }
 
   Future<void> verify(String email, String code) async {
     final repo = ref.read(authRepositoryProvider);
     final result = await repo.verify(email, code);
 
-    // Add debug print to help user troubleshoot
     print('Auth Verify Response: $result');
 
     if (result['access_token'] != null) {
@@ -75,6 +102,7 @@ class Auth extends _$Auth {
         refreshToken: result['refresh_token'],
       );
       state = true;
+      _startValidationTimer();
     } else {
       throw Exception(
         'Verification successful but no token received. Response: $result',
@@ -83,6 +111,7 @@ class Auth extends _$Auth {
   }
 
   Future<void> logout() async {
+    _timer?.cancel();
     final repo = ref.read(authRepositoryProvider);
     await repo.logout();
     state = false;
