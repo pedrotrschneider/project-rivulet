@@ -69,69 +69,47 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                     child: Text('Search for something to start watching'),
                   );
                 }
-                return GridView.builder(
-                  padding: const EdgeInsets.all(16),
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 150, // Responsive items
-                    childAspectRatio: 2 / 3,
-                    mainAxisSpacing: 16,
-                    crossAxisSpacing: 16,
-                  ),
-                  itemCount: items.length,
-                  itemBuilder: (context, index) {
-                    final item = items[index];
 
-                    // Handle relative TMDB paths
-                    String? imageUrl = item.posterUrl;
-                    if (imageUrl != null && imageUrl.startsWith('/')) {
-                      imageUrl = 'https://image.tmdb.org/t/p/w500$imageUrl';
-                    }
+                // Split into categories
+                final movies = items.where((i) => i.type == 'movie').toList();
+                final shows = items.where((i) => i.type != 'movie').toList();
 
-                    return InkWell(
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (context) => MediaDetailScreen(
-                              itemId: item.id,
-                              type: item.type,
+                return CustomScrollView(
+                  slivers: [
+                    if (movies.isNotEmpty) ...[
+                      const SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
+                          child: Text(
+                            'Movies',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                        );
-                      },
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Expanded(
-                            child: imageUrl != null
-                                ? Image.network(
-                                    imageUrl,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) => Container(
-                                      color: Colors.grey[800],
-                                      child: const Icon(Icons.movie, size: 48),
-                                    ),
-                                  )
-                                : Container(
-                                    color: Colors.grey[800],
-                                    child: const Icon(Icons.movie, size: 48),
-                                  ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            item.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.titleSmall,
-                          ),
-                          if (item.year != null)
-                            Text(
-                              item.year!,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                        ],
+                        ),
                       ),
-                    );
-                  },
+                      _buildGrid(movies),
+                      const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                    ],
+
+                    if (shows.isNotEmpty) ...[
+                      const SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+                          child: Text(
+                            'TV Shows',
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                      _buildGrid(shows),
+                      const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                    ],
+                  ],
                 );
               },
               error: (err, stack) => Center(child: Text('Error: $err')),
@@ -139,6 +117,72 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildGrid(List<dynamic> items) {
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      sliver: SliverGrid(
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 150,
+          childAspectRatio: 2 / 3,
+          mainAxisSpacing: 16,
+          crossAxisSpacing: 16,
+        ),
+        delegate: SliverChildBuilderDelegate((context, index) {
+          final item = items[index];
+
+          // Handle relative TMDB paths
+          String? imageUrl = item.posterUrl;
+          if (imageUrl != null && imageUrl.startsWith('/')) {
+            imageUrl = 'https://image.tmdb.org/t/p/w500$imageUrl';
+          }
+
+          return InkWell(
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) =>
+                      MediaDetailScreen(itemId: item.id, type: item.type),
+                ),
+              );
+            },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: imageUrl != null
+                      ? Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Container(
+                            color: Colors.grey[800],
+                            child: const Icon(Icons.movie, size: 48),
+                          ),
+                        )
+                      : Container(
+                          color: Colors.grey[800],
+                          child: const Icon(Icons.movie, size: 48),
+                        ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  item.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                if (item.year != null)
+                  Text(
+                    item.year!,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+              ],
+            ),
+          );
+        }, childCount: items.length),
       ),
     );
   }
