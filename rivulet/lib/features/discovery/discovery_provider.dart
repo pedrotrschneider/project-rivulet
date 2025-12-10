@@ -8,8 +8,9 @@ part 'discovery_provider.g.dart';
 @riverpod
 class DiscoverySearch extends _$DiscoverySearch {
   @override
-  FutureOr<List<DiscoveryItem>> build() {
-    return [];
+  FutureOr<List<DiscoveryItem>> build() async {
+    final repository = ref.read(discoveryRepositoryProvider);
+    return await repository.search('');
   }
 
   Future<void> search(String query) async {
