@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fvp/fvp.dart' as fvp;
@@ -26,8 +28,10 @@ class _MyAppState extends ConsumerState<MyApp> {
     super.initState();
     // Initialize state
     Future.microtask(() {
-      ref.read(serverUrlProvider.notifier).load();
-      ref.read(authProvider.notifier).checkStatus();
+      ref
+          .read(serverUrlProvider.notifier)
+          .load()
+          .then((_) => ref.read(authProvider.notifier).checkStatus());
     });
   }
 
