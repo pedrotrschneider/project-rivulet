@@ -2,6 +2,7 @@ package models
 
 import (
 	"time"
+
 	"github.com/google/uuid"
 )
 
@@ -9,9 +10,10 @@ import (
 
 type Movie struct {
 	Base
+	ProfileID        uuid.UUID      `gorm:"type:uuid;index;not null"`
 	Title            string         `gorm:"index;not null"`
 	Overview         string         `gorm:"type:text"`
-	ExternalIDs      map[string]any `gorm:"type:jsonb;serializer:json"` 
+	ExternalIDs      map[string]any `gorm:"type:jsonb;serializer:json"`
 	MetadataSource   string         `gorm:"default:'manual'"`
 	ReleaseDate      *time.Time
 	Runtime          int
@@ -22,8 +24,9 @@ type Movie struct {
 
 type Series struct {
 	Base
-	Title         string         `gorm:"index;not null"`
-	Overview      string         `gorm:"type:text"`
+	ProfileID     uuid.UUID `gorm:"type:uuid;index;not null"`
+	Title         string    `gorm:"index;not null"`
+	Overview      string    `gorm:"type:text"`
 	Status        string
 	ContentRating string
 	ExternalIDs   map[string]any `gorm:"type:jsonb;serializer:json"`
@@ -34,8 +37,8 @@ type Series struct {
 
 type Season struct {
 	Base
-	SeriesID     uuid.UUID      `gorm:"type:uuid;index;not null"`
-	SeasonNumber int            `gorm:"not null"`
+	SeriesID     uuid.UUID `gorm:"type:uuid;index;not null"`
+	SeasonNumber int       `gorm:"not null"`
 	Title        string
 	Overview     string         `gorm:"type:text"`
 	ExternalIDs  map[string]any `gorm:"type:jsonb;serializer:json"`
@@ -45,11 +48,11 @@ type Season struct {
 
 type Episode struct {
 	Base
-	SeriesID      uuid.UUID      `gorm:"type:uuid;index;not null"`
-	SeasonID      uuid.UUID      `gorm:"type:uuid;index;not null"`
-	EpisodeNumber int            `gorm:"not null"`
+	SeriesID      uuid.UUID `gorm:"type:uuid;index;not null"`
+	SeasonID      uuid.UUID `gorm:"type:uuid;index;not null"`
+	EpisodeNumber int       `gorm:"not null"`
 	Title         string
-	Overview      string         `gorm:"type:text"`
+	Overview      string `gorm:"type:text"`
 	AirDate       *time.Time
 	Runtime       int
 	ExternalIDs   map[string]any `gorm:"type:jsonb;serializer:json"`
@@ -60,8 +63,8 @@ type Episode struct {
 
 type Person struct {
 	Base
-	Name             string         `gorm:"index;not null"`
-	Biography        string         `gorm:"type:text"`
+	Name             string `gorm:"index;not null"`
+	Biography        string `gorm:"type:text"`
 	BirthDate        *time.Time
 	PlaceOfBirth     string
 	ProfileImagePath string
@@ -75,7 +78,7 @@ type Credit struct {
 	PersonID      uuid.UUID `gorm:"type:uuid;index;not null"`
 	Role          string    // "Actor", "Director", "Writer"
 	CharacterName string
-	Order         int       // For sorting cast lists
+	Order         int // For sorting cast lists
 }
 
 // --- Assets ---

@@ -33,7 +33,7 @@ final class DiscoverySearchProvider
   DiscoverySearch create() => DiscoverySearch();
 }
 
-String _$discoverySearchHash() => r'87c79c163566fd701a6e13eaba012e7e2f2320b1';
+String _$discoverySearchHash() => r'621911d8292de90a16187991f2c6f2129173b622';
 
 abstract class _$DiscoverySearch extends $AsyncNotifier<List<DiscoveryItem>> {
   FutureOr<List<DiscoveryItem>> build();

@@ -61,9 +61,13 @@ func Start() {
 	v1.POST("/profiles", CreateProfile)
 
 	// Library
-	v1.POST("/library", AddToLibrary)
-    v1.GET("/library", GetLibrary)
-    v1.GET("/library/check/:id", CheckLibrary)
+	library := v1.Group("/library")
+	library.POST("", AddToLibrary)
+	library.GET("", GetLibrary)
+	library.GET("/check/:id", CheckLibrary)
+	library.DELETE("/:id", RemoveFromLibrary)
+	library.GET("/tv/:id/seasons", GetLibraryShowSeasons)
+	library.GET("/tv/:id/season/:num", GetLibrarySeasonEpisodes)
 
 	// History
 	v1.POST("/history/progress", UpdateProgress)

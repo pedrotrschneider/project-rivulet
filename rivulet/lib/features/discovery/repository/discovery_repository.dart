@@ -45,8 +45,21 @@ class DiscoveryRepository {
     return SeasonDetail.fromJson(response.data);
   }
 
-  Future<void> addToLibrary(String id) async {
-    await _dio.post('/library', data: {'external_id': id});
+  Future<void> addToLibrary(String id, String type) async {
+    await _dio.post('/library', data: {'external_id': id, 'media_type': type});
+  }
+
+  Future<bool> checkLibraryStatus(String id) async {
+    try {
+      final response = await _dio.get('/library/check/$id');
+      return response.data['in_library'] as bool;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> removeFromLibrary(String id) async {
+    await _dio.delete('/library/$id');
   }
 
   Future<List<StreamResult>> scrapeStreams({

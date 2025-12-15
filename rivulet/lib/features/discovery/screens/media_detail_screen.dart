@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rivulet/features/discovery/discovery_provider.dart';
-import 'package:rivulet/features/discovery/repository/discovery_repository.dart';
+
+import '../library_status_provider.dart';
 import '../widgets/stream_selection_sheet.dart';
 
 class MediaDetailScreen extends ConsumerStatefulWidget {
@@ -31,27 +32,112 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
       appBar: AppBar(
         title: const Text('Details'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            tooltip: 'Add to Library',
-            onPressed: () async {
-              try {
-                // Optimistic UI updates could be added here later
-                await ref
-                    .read(discoveryRepositoryProvider)
-                    .addToLibrary(widget.itemId);
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Added to Library')),
+          Consumer(
+            builder: (context, ref, child) {
+              // We use widget.itemId (TMDB ID usually) which works for checking
+              // because backend stores both IDs.
+              final statusAsync = ref.watch(
+                libraryStatusProvider(widget.itemId),
+              );
+
+              return statusAsync.when(
+                data: (inLibrary) {
+                  return IconButton(
+                    icon: Icon(inLibrary ? Icons.check : Icons.add),
+                    tooltip: inLibrary
+                        ? 'Remove from Library'
+                        : 'Add to Library',
+                    onPressed: () async {
+                      // Logic to add/remove
+                      try {
+                        // Resolve type and preferred ID
+                        final detail = ref
+                            .read(
+                              mediaDetailProvider(
+                                id: widget.itemId,
+                                type: widget.type,
+                              ),
+                            )
+                            .value;
+                        // Use widget.itemId for consistency with provider family,
+                        // unless we want to be very specific about adding with IMDb.
+                        // But check uses widget.itemId.
+                        // If we add with IMDb ID, Check with TMDB ID works (as validated).
+                        // So using widget.itemId for toggle is simplest and consistent.
+                        // But wait, if I add with TMDB ID, AddToLibrary service might re-fetch details if it doesn't see "tt".
+                        // AddToLibrary handles "tmdb:123" or just "123".
+                        // If I pass "123" (TMDB ID), CheckLibrary("123") works.
+                        // So let's stick to widget.itemId for everything to avoid confusion,
+                        // UNLESS user specifically requested IMDb ID preference for ADDING.
+                        // User said: "try to ise IMDB ids whenever possible".
+                        // So if I add, I should use IMDb ID.
+                        // But CheckLibrary needs to know if THAT item is in library.
+                        // If I check(TMDB_ID) -> returns true/false.
+                        // If false -> I call toggle.
+                        // toggle -> calls provider.toggle.
+                        // provider.toggle calls repo.addToLibrary(id).
+                        // I need to pass the PREFERRED ID to provider.toggle?
+                        // Provider build(id) uses one ID.
+                        // If I construct provider with TMDB ID, toggle uses TMDB ID.
+                        // Maybe I should pass preferred ID to toggle?
+
+                        // Let's modify provider.toggle to accept id/type override?
+                        // Or just update MediaDetailScreen to handle logic manually instead of provider.toggle?
+                        // Provider toggle is cleaner.
+                        // Let's pass (id, type) to toggle.
+
+                        final idToAdd =
+                            detail?.imdbId ??
+                            (detail?.id.isNotEmpty == true
+                                ? detail!.id
+                                : widget.itemId);
+                        final typeToAdd = detail?.type ?? widget.type;
+
+                        // If inLibrary, remove (using widget.itemId or checking ID? Remove uses externalID lookup).
+                        // RemoveFromLibrary(id) checks external_ids.
+                        // So removing by TMDB ID works even if added by IMDb ID.
+
+                        // Adding: If I add by TMDB ID, it works.
+                        // User prefers IMDb.
+                        // So if NOT in library, I want to add using `idToAdd` (IMDb).
+                        // But provider holds `id` (TMDB).
+
+                        // I will update provider to allow passing add arguments.
+                        await ref
+                            .read(libraryStatusProvider(widget.itemId).notifier)
+                            .toggle(typeToAdd, idOverride: idToAdd);
+
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                inLibrary
+                                    ? 'Removed from Library'
+                                    : 'Added to Library',
+                              ),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Action failed: $e')),
+                          );
+                        }
+                      }
+                    },
                   );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(SnackBar(content: Text('Failed to add: $e')));
-                }
-              }
+                },
+                loading: () => const Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+                error: (_, __) => const Icon(Icons.error),
+              );
             },
           ),
         ],

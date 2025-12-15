@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../api/rivulet_api.dart';
 import 'auth_repository.dart';
+import 'profiles_provider.dart';
 
 part 'auth_provider.g.dart';
 
@@ -38,9 +40,17 @@ class Auth extends _$Auth {
 
   @override
   bool build() {
+    // Listen for global 401 events
+    final subscription = unauthorizedEvent.stream.listen((_) {
+      print('Received unauthorized event, logging out...');
+      logout();
+    });
+
     ref.onDispose(() {
       _timer?.cancel();
+      subscription.cancel();
     });
+
     return false;
   }
 
@@ -114,6 +124,8 @@ class Auth extends _$Auth {
     _timer?.cancel();
     final repo = ref.read(authRepositoryProvider);
     await repo.logout();
+    // Also clear the selected profile on logout
+    await ref.read(selectedProfileProvider.notifier).clear();
     state = false;
   }
 }

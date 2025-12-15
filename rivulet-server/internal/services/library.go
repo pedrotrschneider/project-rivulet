@@ -26,19 +26,19 @@ func AddToLibrary(mdbClient *mdblist.Client, tmdbClient *tmdb.Client, mdbApiKey,
 		// For now, let MDBList figure it out or pass explicit type if your FE sends it.
 	}
 
-	// 2. Check if already exists in DB (Avoid re-fetching)
+	// 2. Check if already exists in DB for this PROFILE
 	// This uses GORM's JSON querying capabilities
 	var existingMovie models.Movie
 	var existingSeries models.Series
 
-	// Try finding movie
-	err := db.DB.Where("external_ids ->> 'imdb' = ? OR external_ids ->> 'tmdb' = ?", cleanID, cleanID).First(&existingMovie).Error
+	// Try finding movie for this profile
+	err := db.DB.Where("(external_ids ->> 'imdb' = ? OR external_ids ->> 'tmdb' = ?) AND profile_id = ?", cleanID, cleanID, profileID).First(&existingMovie).Error
 	if err == nil {
 		return linkToProfile(existingMovie.ID, mediaType, profileID)
 	}
 
-	// Try finding series
-	err = db.DB.Where("external_ids ->> 'imdb' = ? OR external_ids ->> 'tmdb' = ?", cleanID, cleanID).First(&existingSeries).Error
+	// Try finding series for this profile
+	err = db.DB.Where("(external_ids ->> 'imdb' = ? OR external_ids ->> 'tmdb' = ?) AND profile_id = ?", cleanID, cleanID, profileID).First(&existingSeries).Error
 	if err == nil {
 		return linkToProfile(existingSeries.ID, mediaType, profileID)
 	}
@@ -67,9 +67,10 @@ func AddToLibrary(mdbClient *mdblist.Client, tmdbClient *tmdb.Client, mdbApiKey,
 		}
 	}
 
-	// 5. Save to DB
+	// 5. Save to DB (Create new copy linked to Profile)
 	if mediaType == "movie" {
 		movie := models.Movie{
+			ProfileID:      profileID,
 			Title:          details.Title,
 			Overview:       details.Description,
 			MetadataSource: "mdblist",
@@ -101,7 +102,12 @@ func AddToLibrary(mdbClient *mdblist.Client, tmdbClient *tmdb.Client, mdbApiKey,
 
 	} else {
 		// Is Series
+		// Normalize mediaType to "tv" for backend consistency if frontend sent "tv"
+		// But db might store "series", so keep what passed or standardize?
+		// Existing logic uses "Series" model.
+
 		series := models.Series{
+			ProfileID:   profileID,
 			Title:       details.Title,
 			Overview:    details.Description,
 			ExternalIDs: map[string]any{"imdb": details.ImdbID, "tmdb": details.TmdbID},
@@ -135,7 +141,7 @@ func AddToLibrary(mdbClient *mdblist.Client, tmdbClient *tmdb.Client, mdbApiKey,
 						seasonPosterPath, _ = DownloadImage(fullUrl)
 					}
 
-					// B. Create Season Record
+					// B. Create Season Record (Linked to this specific Series instance)
 					season := models.Season{
 						SeriesID:     series.ID,
 						SeasonNumber: s.SeasonNumber,

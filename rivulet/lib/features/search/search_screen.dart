@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rivulet/features/discovery/discovery_provider.dart';
-import 'package:rivulet/features/auth/auth_provider.dart';
 import 'package:rivulet/features/discovery/screens/media_detail_screen.dart';
 
 class DiscoveryScreen extends ConsumerStatefulWidget {
@@ -25,17 +24,7 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
     final searchState = ref.watch(discoverySearchProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Discover'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () {
-              ref.read(authProvider.notifier).logout();
-            },
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Discover')),
       body: Column(
         children: [
           Padding(
@@ -92,7 +81,6 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
                       _buildGrid(movies),
                       const SliverToBoxAdapter(child: SizedBox(height: 24)),
                     ],
-
                     if (shows.isNotEmpty) ...[
                       const SliverToBoxAdapter(
                         child: Padding(

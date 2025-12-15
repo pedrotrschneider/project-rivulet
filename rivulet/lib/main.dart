@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fvp/fvp.dart' as fvp;
 import 'package:rivulet/features/auth/auth_provider.dart';
+import 'package:rivulet/features/auth/profiles_provider.dart';
 import 'package:rivulet/features/auth/screens/login_screen.dart';
+import 'package:rivulet/features/auth/screens/profile_selection_screen.dart';
 import 'package:rivulet/features/auth/screens/server_setup_screen.dart';
-import 'package:rivulet/features/search/search_screen.dart';
+import 'package:rivulet/features/app_shell/app_shell.dart';
 import 'package:rivulet/features/player/player_screen.dart';
 
 void main() {
@@ -27,20 +29,19 @@ class _MyAppState extends ConsumerState<MyApp> {
   void initState() {
     super.initState();
     // Initialize state
-    Future.microtask(() {
-      ref
-          .read(serverUrlProvider.notifier)
-          .load()
-          .then((_) => ref.read(authProvider.notifier).checkStatus());
+    Future.microtask(() async {
+      await ref.read(serverUrlProvider.notifier).load();
+      await ref.read(authProvider.notifier).checkStatus();
+      await ref.read(selectedProfileProvider.notifier).load();
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    // Watch server URL and Auth State
-    // Rename variable to reflect it's just a String, not an AsyncValue
+    // Watch server URL, Auth State, and Selected Profile
     final serverUrl = ref.watch(serverUrlProvider);
     final isAuth = ref.watch(authProvider);
+    final selectedProfileId = ref.watch(selectedProfileProvider);
 
     return MaterialApp(
       title: 'Rivulet',
@@ -51,8 +52,7 @@ class _MyAppState extends ConsumerState<MyApp> {
         ),
         useMaterial3: true,
       ),
-      // Remove .when() and pass the variable directly
-      home: _buildHome(serverUrl, isAuth),
+      home: _buildHome(serverUrl, isAuth, selectedProfileId),
 
       onGenerateRoute: (settings) {
         if (settings.name == '/player') {
@@ -66,7 +66,7 @@ class _MyAppState extends ConsumerState<MyApp> {
     );
   }
 
-  Widget _buildHome(String? serverUrl, bool isAuth) {
+  Widget _buildHome(String? serverUrl, bool isAuth, String? selectedProfileId) {
     if (serverUrl == null) {
       // Step 1: Need Server URL
       return const ServerSetupScreen();
@@ -77,7 +77,12 @@ class _MyAppState extends ConsumerState<MyApp> {
       return const LoginScreen();
     }
 
-    // Step 3: Logged In -> Main App
-    return const DiscoveryScreen();
+    if (selectedProfileId == null) {
+      // Step 3: Need Profile Selection
+      return const ProfileSelectionScreen();
+    }
+
+    // Step 4: Logged In with Profile -> Main App
+    return const AppShell();
   }
 }
