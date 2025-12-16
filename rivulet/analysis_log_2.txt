@@ -1,0 +1,58 @@
+Analyzing rivulet...                                            
+
+   info • Don't invoke 'print' in production code • lib/api/real_debrid_client.dart:24:11 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/real_debrid_client.dart:25:11 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/real_debrid_client.dart:29:11 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/real_debrid_client.dart:31:13 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/real_debrid_client.dart:60:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/real_debrid_client.dart:63:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/real_debrid_client.dart:73:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/real_debrid_client.dart:86:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/real_debrid_client.dart:102:7 • avoid_print
+   info • The import of 'package:flutter_riverpod/flutter_riverpod.dart' is unnecessary because all of the used elements are also provided by the import of 'package:riverpod_annotation/riverpod_annotation.dart' • lib/api/rivulet_api.dart:5:8 • unnecessary_import
+   info • Don't invoke 'print' in production code • lib/api/rivulet_api.dart:76:5 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/rivulet_api.dart:77:5 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/rivulet_api.dart:78:5 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/rivulet_api.dart:79:5 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/rivulet_api.dart:80:5 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/rivulet_api.dart:83:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/rivulet_api.dart:84:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/rivulet_api.dart:86:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/rivulet_api.dart:87:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/rivulet_api.dart:89:5 • avoid_print
+   info • Don't invoke 'print' in production code • lib/api/torrentio_client.dart:26:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/features/auth/auth_provider.dart:45:7 • avoid_print
+   info • Don't invoke 'print' in production code • lib/features/auth/auth_provider.dart:68:9 • avoid_print
+   info • Don't invoke 'print' in production code • lib/features/auth/auth_provider.dart:83:9 • avoid_print
+   info • Don't invoke 'print' in production code • lib/features/auth/auth_provider.dart:107:5 • avoid_print
+   info • The import of 'package:flutter_riverpod/flutter_riverpod.dart' is unnecessary because all of the used elements are also provided by the import of 'package:riverpod_annotation/riverpod_annotation.dart' • lib/features/auth/auth_repository.dart:4:8 • unnecessary_import
+   info • The import of 'package:flutter_riverpod/flutter_riverpod.dart' is unnecessary because all of the used elements are also provided by the import of 'package:riverpod_annotation/riverpod_annotation.dart' • lib/features/auth/profiles_provider.dart:3:8 • unnecessary_import
+   info • The import of 'package:flutter_riverpod/flutter_riverpod.dart' is unnecessary because all of the used elements are also provided by the import of 'package:riverpod_annotation/riverpod_annotation.dart' • lib/features/auth/profiles_repository.dart:3:8 • unnecessary_import
+   info • 'scale' is deprecated and shouldn't be used. Use scaleByVector3, scaleByVector4, or scaleByDouble instead • lib/features/auth/screens/profile_selection_screen.dart:123:42 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/auth/screens/profile_selection_screen.dart:141:54 • deprecated_member_use
+   info • Unnecessary use of multiple underscores • lib/features/auth/screens/profile_selection_screen.dart:154:45 • unnecessary_underscores
+   info • Unnecessary use of multiple underscores • lib/features/auth/screens/profile_selection_screen.dart:154:49 • unnecessary_underscores
+   info • 'scale' is deprecated and shouldn't be used. Use scaleByVector3, scaleByVector4, or scaleByDouble instead • lib/features/auth/screens/profile_selection_screen.dart:204:42 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/auth/screens/profile_selection_screen.dart:219:47 • deprecated_member_use
+   info • The import of 'package:flutter_riverpod/flutter_riverpod.dart' is unnecessary because all of the used elements are also provided by the import of 'package:riverpod_annotation/riverpod_annotation.dart' • lib/features/discovery/discovery_provider.dart:1:8 • unnecessary_import
+   info • Unnecessary use of multiple underscores • lib/features/discovery/screens/media_detail_screen.dart:127:28 • unnecessary_underscores
+   info • Statements in an if should be enclosed in a block • lib/features/discovery/screens/media_detail_screen.dart:247:37 • curly_braces_in_flow_control_structures
+   info • Unnecessary braces in a string interpolation • lib/features/discovery/screens/media_detail_screen.dart:293:70 • unnecessary_brace_in_string_interps
+   info • Unnecessary use of multiple underscores • lib/features/discovery/screens/media_detail_screen.dart:311:44 • unnecessary_underscores
+   info • Statements in an if should be enclosed in a block • lib/features/discovery/widgets/stream_selection_sheet.dart:75:9 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block • lib/features/discovery/widgets/stream_selection_sheet.dart:77:9 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block • lib/features/discovery/widgets/stream_selection_sheet.dart:91:9 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block • lib/features/discovery/widgets/stream_selection_sheet.dart:93:13 • curly_braces_in_flow_control_structures
+   info • Statements in an if should be enclosed in a block • lib/features/discovery/widgets/stream_selection_sheet.dart:95:13 • curly_braces_in_flow_control_structures
+   info • The import of 'package:flutter_riverpod/flutter_riverpod.dart' is unnecessary because all of the used elements are also provided by the import of 'package:riverpod_annotation/riverpod_annotation.dart' • lib/features/library/library_repository.dart:3:8 • unnecessary_import
+   info • Unnecessary use of multiple underscores • lib/features/library/library_screen.dart:139:41 • unnecessary_underscores
+   info • Unnecessary use of multiple underscores • lib/features/library/library_screen.dart:139:45 • unnecessary_underscores
+   info • Unnecessary use of multiple underscores • lib/features/search/search_screen.dart:186:45 • unnecessary_underscores
+   info • Unnecessary use of multiple underscores • lib/features/search/search_screen.dart:186:49 • unnecessary_underscores
+   info • Statements in an if should be enclosed in a block • lib/features/search/search_screen.dart:227:11 • curly_braces_in_flow_control_structures
+   info • Unnecessary use of multiple underscores • lib/features/search/search_screen.dart:342:41 • unnecessary_underscores
+   info • Unnecessary use of multiple underscores • lib/features/search/search_screen.dart:342:45 • unnecessary_underscores
+   info • Don't invoke 'print' in production code • test/api/torrentio_client_test.dart:20:7 • avoid_print
+   info • Don't invoke 'print' in production code • test/api/torrentio_client_test.dart:21:7 • avoid_print
+
+54 issues found. (ran in 0.9s)

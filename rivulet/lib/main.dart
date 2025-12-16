@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fvp/fvp.dart' as fvp;
@@ -56,9 +54,27 @@ class _MyAppState extends ConsumerState<MyApp> {
 
       onGenerateRoute: (settings) {
         if (settings.name == '/player') {
-          final url = settings.arguments as String;
+          final args = settings.arguments as Map<String, dynamic>;
           return MaterialPageRoute(
-            builder: (context) => PlayerScreen(url: url),
+            builder: (context) => PlayerScreen(
+              url:
+                  args['streamUrl'], // Discovery passes it as 'streamUrl' or we need to check usage?
+              // The search screen passes args? No, discovery and others invoke PlayerScreen constructor directly usually.
+              // Wait, the named route is used in main.dart.
+              // StreamSelectionSheet Pushes MaterialPageRoute directly.
+              // So main.dart likely handles deep links? Or just route generation.
+              // If StreamSelectionSheet pushes directly, it uses the constructor.
+              // If main.dart handles /player, it uses args map.
+              // Let's assume the map key 'streamUrl' is what I used in main.dart recently.
+              // But PlayerScreen now expects 'url'.
+              externalId: args['externalId'],
+              title: args['title'],
+              type: args['type'],
+              season: args['season'],
+              episode: args['episode'],
+              startPosition: args['startPosition'] ?? 0,
+              imdbId: args['imdbId'],
+            ),
           );
         }
         return null;

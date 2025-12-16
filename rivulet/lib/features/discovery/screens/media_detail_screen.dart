@@ -40,9 +40,26 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
     final detailAsync = ref.watch(
       mediaDetailProvider(id: widget.itemId, type: widget.type),
     );
-    final historyAsync = ref.watch(
-      mediaHistoryProvider(externalId: widget.itemId, type: widget.type),
-    );
+
+    // Use IMDB ID for history lookup if available from details, otherwise start with widget ID
+    // Verify strict requirements: Frontend must switch to IMDB ID.
+    // Logic: If widget.itemId is IMDB, use it.
+    // If widget.itemId is NOT IMDB, wait for detailAsync to provide IMDB ID.
+    String? effectiveHistoryId;
+    if (widget.itemId.startsWith('tt')) {
+      effectiveHistoryId = widget.itemId;
+    } else if (detailAsync.asData?.value.imdbId != null) {
+      effectiveHistoryId = detailAsync.asData!.value.imdbId;
+    }
+
+    final historyAsync = effectiveHistoryId != null
+        ? ref.watch(
+            mediaHistoryProvider(
+              externalId: effectiveHistoryId,
+              type: widget.type,
+            ),
+          )
+        : const AsyncValue<List<HistoryItem>>.data([]);
 
     return Scaffold(
       appBar: AppBar(
@@ -75,32 +92,6 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                               ),
                             )
                             .value;
-                        // Use widget.itemId for consistency with provider family,
-                        // unless we want to be very specific about adding with IMDb.
-                        // But check uses widget.itemId.
-                        // If we add with IMDb ID, Check with TMDB ID works (as validated).
-                        // So using widget.itemId for toggle is simplest and consistent.
-                        // But wait, if I add with TMDB ID, AddToLibrary service might re-fetch details if it doesn't see "tt".
-                        // AddToLibrary handles "tmdb:123" or just "123".
-                        // If I pass "123" (TMDB ID), CheckLibrary("123") works.
-                        // So let's stick to widget.itemId for everything to avoid confusion,
-                        // UNLESS user specifically requested IMDb ID preference for ADDING.
-                        // User said: "try to ise IMDB ids whenever possible".
-                        // So if I add, I should use IMDb ID.
-                        // But CheckLibrary needs to know if THAT item is in library.
-                        // If I check(TMDB_ID) -> returns true/false.
-                        // If false -> I call toggle.
-                        // toggle -> calls provider.toggle.
-                        // provider.toggle calls repo.addToLibrary(id).
-                        // I need to pass the PREFERRED ID to provider.toggle?
-                        // Provider build(id) uses one ID.
-                        // If I construct provider with TMDB ID, toggle uses TMDB ID.
-                        // Maybe I should pass preferred ID to toggle?
-
-                        // Let's modify provider.toggle to accept id/type override?
-                        // Or just update MediaDetailScreen to handle logic manually instead of provider.toggle?
-                        // Provider toggle is cleaner.
-                        // Let's pass (id, type) to toggle.
 
                         final idToAdd =
                             detail?.imdbId ??
@@ -109,16 +100,6 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                                 : widget.itemId);
                         final typeToAdd = detail?.type ?? widget.type;
 
-                        // If inLibrary, remove (using widget.itemId or checking ID? Remove uses externalID lookup).
-                        // RemoveFromLibrary(id) checks external_ids.
-                        // So removing by TMDB ID works even if added by IMDb ID.
-
-                        // Adding: If I add by TMDB ID, it works.
-                        // User prefers IMDb.
-                        // So if NOT in library, I want to add using `idToAdd` (IMDb).
-                        // But provider holds `id` (TMDB).
-
-                        // I will update provider to allow passing add arguments.
                         await ref
                             .read(libraryStatusProvider(widget.itemId).notifier)
                             .toggle(typeToAdd, idOverride: idToAdd);
@@ -310,22 +291,20 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                                             showModalBottomSheet(
                                               context: context,
                                               isScrollControlled: true,
-                                              builder: (context) => StreamSelectionSheet(
-                                                externalId:
-                                                    detail.imdbId ??
-                                                    widget.itemId,
-                                                title: 'S${targetS}E${targetE}',
-                                                type: 'show',
-                                                season: targetS,
-                                                episode: targetE,
-                                                // Only pass resume params if resuming EXACT episode
-                                                startPosition: isResuming
-                                                    ? latest.positionTicks
-                                                    : null,
-                                                // STRICT: Use stored values or null if not available for resume
-                                                nextSeason: latest.nextSeason,
-                                                nextEpisode: latest.nextEpisode,
-                                              ),
+                                              builder: (context) =>
+                                                  StreamSelectionSheet(
+                                                    externalId: detail.imdbId!,
+                                                    title:
+                                                        'S${targetS}E$targetE - ${detail.title}',
+                                                    type: 'show',
+                                                    season: targetS,
+                                                    episode: targetE,
+                                                    imdbId: detail.imdbId,
+                                                    // Only pass resume params if resuming EXACT episode
+                                                    startPosition: isResuming
+                                                        ? latest.positionTicks
+                                                        : null,
+                                                  ),
                                             );
                                           },
                                         ),
@@ -598,77 +577,38 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                                         ],
                                       ),
                                       onTap: () {
-                                        // Open Stream Selection for Episode
+                                        // Calculate start position from history
+                                        int startPos = 0;
+                                        if (historyAsync.hasValue) {
+                                          final h = historyAsync.value!
+                                              .firstWhere(
+                                                (h) =>
+                                                    h.seasonNumber ==
+                                                        _selectedSeason &&
+                                                    h.episodeNumber ==
+                                                        episode.episodeNumber,
+                                                orElse: () =>
+                                                    HistoryItem.empty(),
+                                              );
+                                          startPos = h.positionTicks;
+                                        }
+
                                         showModalBottomSheet(
                                           context: context,
                                           isScrollControlled: true,
-                                          builder: (context) => StreamSelectionSheet(
-                                            externalId:
-                                                detail.imdbId ??
-                                                widget
-                                                    .itemId, // Use IMDB ID if available
-                                            title:
-                                                'S${_selectedSeason}E${episode.episodeNumber} - ${episode.name}',
-                                            type: 'show',
-                                            season: _selectedSeason,
-                                            episode: episode.episodeNumber,
-                                            nextSeason: (() {
-                                              if (index + 1 < episodes.length)
-                                                return _selectedSeason;
-                                              // Check for next season
-                                              final seasons = ref
-                                                  .read(
-                                                    showSeasonsProvider(
-                                                      widget.itemId,
-                                                    ),
-                                                  )
-                                                  .asData
-                                                  ?.value;
-                                              if (seasons != null) {
-                                                final currentIdx = seasons
-                                                    .indexWhere(
-                                                      (s) =>
-                                                          s.seasonNumber ==
-                                                          _selectedSeason,
-                                                    );
-                                                if (currentIdx != -1 &&
-                                                    currentIdx + 1 <
-                                                        seasons.length) {
-                                                  return seasons[currentIdx + 1]
-                                                      .seasonNumber;
-                                                }
-                                              }
-                                              return null;
-                                            })(),
-                                            nextEpisode: (() {
-                                              if (index + 1 < episodes.length)
-                                                return episodes[index + 1]
-                                                    .episodeNumber;
-                                              // Check for next season
-                                              final seasons = ref
-                                                  .read(
-                                                    showSeasonsProvider(
-                                                      widget.itemId,
-                                                    ),
-                                                  )
-                                                  .asData
-                                                  ?.value;
-                                              if (seasons != null) {
-                                                final currentIdx = seasons
-                                                    .indexWhere(
-                                                      (s) =>
-                                                          s.seasonNumber ==
-                                                          _selectedSeason,
-                                                    );
-                                                if (currentIdx != -1 &&
-                                                    currentIdx + 1 <
-                                                        seasons.length) {
-                                                  return 1;
-                                                }
-                                              }
-                                              return null;
-                                            })(),
-                                          ),
+                                          builder: (context) =>
+                                              StreamSelectionSheet(
+                                                externalId:
+                                                    detail.imdbId ??
+                                                    widget.itemId,
+                                                title:
+                                                    'S${_selectedSeason}E${episode.episodeNumber} - ${episode.name}',
+                                                type: 'show',
+                                                season: _selectedSeason,
+                                                episode: episode.episodeNumber,
+                                                startPosition: startPos,
+                                                imdbId: detail.imdbId,
+                                              ),
                                         );
                                       },
                                     );
@@ -723,6 +663,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                     title: detail.title,
                     type: 'movie',
                     startPosition: startPos,
+                    imdbId: detail.imdbId,
                   ),
                 );
               },

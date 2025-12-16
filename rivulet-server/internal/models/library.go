@@ -24,16 +24,20 @@ type LibraryEntry struct {
 // MediaProgress tracks playback.
 type MediaProgress struct {
 	Base
-	ProfileID uuid.UUID `gorm:"type:uuid;uniqueIndex:idx_prog_profile_media;not null"`
+	ProfileID uuid.UUID `gorm:"type:uuid;uniqueIndex:idx_media_progress_unique;not null"`
 
 	// What are we watching?
-	MediaID   *uuid.UUID `gorm:"type:uuid;uniqueIndex:idx_prog_profile_media"`
-	EpisodeID *uuid.UUID `gorm:"type:uuid;uniqueIndex:idx_prog_profile_media"`
+	ImdbID string `gorm:"uniqueIndex:idx_media_progress_unique;not null"`
+	Type   string `gorm:"uniqueIndex:idx_media_progress_unique;not null"` // "movie" or "series"
 
-	PositionTicks int64 // Stored in ticks (10,000 ticks = 1ms) or seconds, up to you.
+	SeasonNumber  int `gorm:"uniqueIndex:idx_media_progress_unique;default:0"`
+	EpisodeNumber int `gorm:"uniqueIndex:idx_media_progress_unique;default:0"`
+
+	PositionTicks int64
 	DurationTicks int64
 	IsWatched     bool
 	LastPlayedAt  time.Time
 
-	NextEpisodeID *uuid.UUID `gorm:"type:uuid"`
+	NextSeasonNumber  *int
+	NextEpisodeNumber *int
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
@@ -7,24 +8,24 @@ import 'package:rivulet/features/discovery/repository/discovery_repository.dart'
 
 class PlayerScreen extends ConsumerStatefulWidget {
   final String url;
-  final String? externalId;
-  final String? type;
+  final String externalId;
+  final String title;
+  final String type;
   final int? season;
   final int? episode;
   final int startPosition; // Ticks (microseconds * 10)
-  final int? nextSeason;
-  final int? nextEpisode;
+  final String? imdbId;
 
   const PlayerScreen({
     super.key,
     required this.url,
-    this.externalId,
-    this.type,
+    required this.externalId,
+    required this.title,
+    required this.type,
     this.season,
     this.episode,
     this.startPosition = 0,
-    this.nextSeason,
-    this.nextEpisode,
+    this.imdbId,
   });
 
   @override
@@ -37,6 +38,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   String _title = 'Loading...';
   Timer? _progressTimer;
 
+  // Track selection
+  bool _showControls = true;
+  Timer? _hideControlsTimer;
+
   @override
   void initState() {
     super.initState();
@@ -45,6 +50,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
   Future<void> _initPlayer() async {
     try {
+      // Register FVP for better playback support
       try {
         fvp.registerWith(
           options: {
@@ -60,35 +66,33 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       if (widget.startPosition > 0) {
         final position = Duration(microseconds: widget.startPosition ~/ 10);
         await _controller.seekTo(position);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Resumed from ${_formatDuration(position)}"),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
-
-      String newTitle = "Unknown Video";
-      final info = _controller.getMediaInfo();
-      if (info != null) {
-        final tags = info.metadata;
-        if (tags.containsKey('title')) {
-          newTitle = tags['title']!;
-        } else {
-          final uri = Uri.parse(widget.url);
-          String filename = uri.pathSegments.last;
-          filename = Uri.decodeComponent(filename);
-          newTitle = filename;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Resumed from ${_formatDuration(position)}"),
+              duration: const Duration(seconds: 2),
+            ),
+          );
         }
       }
-      setState(() {
-        _isInitialized = true;
-        _title = newTitle;
-      });
+
+      String newTitle = widget.title;
+      // Try to get title from metadata if available/generic
+      // But widget.title is usually passed from discovery, so prefer that unless it's empty?
+      // Keeping original behavior: explicit title passed in constructor is usually correct.
+
+      if (mounted) {
+        setState(() {
+          _isInitialized = true;
+          _title = newTitle;
+        });
+      }
+
       _controller.play();
       _startProgressTracking();
+      _startHideControlsTimer();
     } catch (e) {
-      print("Error initializing: $e");
+      debugPrint("Error initializing: $e");
     }
   }
 
@@ -104,19 +108,17 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   }
 
   void _startProgressTracking() {
-    // Sync every 15 seconds
     _progressTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
       _reportProgress();
     });
   }
 
   Future<void> _reportProgress() async {
-    if (!_controller.value.isInitialized || widget.externalId == null) return;
+    if (!_controller.value.isInitialized) return;
 
     final position = _controller.value.position;
     final duration = _controller.value.duration;
 
-    // Logic for "Is Watched" (e.g. > 90%)
     bool isWatched = false;
     if (duration.inSeconds > 0) {
       if (position.inSeconds / duration.inSeconds > 0.9) {
@@ -126,6 +128,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
     final Map<String, dynamic> progress = {
       'external_id': widget.externalId,
+      'imdb_id': widget.imdbId,
       'type': widget.type,
       'season': widget.season ?? 0,
       'episode': widget.episode ?? 0,
@@ -133,14 +136,34 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       'duration_ticks': duration.inMicroseconds * 10,
       'is_watched': isWatched,
       'timestamp': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      if (widget.nextSeason != null) 'next_season': widget.nextSeason,
-      if (widget.nextEpisode != null) 'next_episode': widget.nextEpisode,
     };
 
     try {
       await ref.read(discoveryRepositoryProvider).updateProgress([progress]);
     } catch (e) {
-      print('Failed to sync progress: $e');
+      debugPrint('Failed to sync progress: $e');
+    }
+  }
+
+  void _startHideControlsTimer() {
+    _hideControlsTimer?.cancel();
+    _hideControlsTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted && _controller.value.isPlaying) {
+        setState(() {
+          _showControls = false;
+        });
+      }
+    });
+  }
+
+  void _toggleControls() {
+    setState(() {
+      _showControls = !_showControls;
+    });
+    if (_showControls) {
+      _startHideControlsTimer();
+    } else {
+      _hideControlsTimer?.cancel();
     }
   }
 
@@ -212,6 +235,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   @override
   void dispose() {
     _progressTimer?.cancel();
+    _hideControlsTimer?.cancel();
     _reportProgress(); // Last sync
     _controller.dispose();
     super.dispose();
@@ -219,89 +243,114 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: false,
-      onPopInvoked: (didPop) async {
-        if (didPop) return;
-        // Pause and report progress before popping
-        if (_isInitialized) {
-          _controller.pause();
-          await _reportProgress();
-        }
-        if (context.mounted) {
-          Navigator.of(context).pop();
-        }
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: Text(_title),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.audiotrack),
-              onPressed: () => _showTrackSelector(context, 'audio'),
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: GestureDetector(
+        onTap: _toggleControls,
+        behavior: HitTestBehavior.opaque,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Center(
+              child: _isInitialized
+                  ? AspectRatio(
+                      aspectRatio: _controller.value.aspectRatio,
+                      child: VideoPlayer(_controller),
+                    )
+                  : const CircularProgressIndicator(),
             ),
-            IconButton(
-              icon: const Icon(Icons.subtitles),
-              onPressed: () => _showTrackSelector(context, 'subtitle'),
-            ),
+            if (_showControls && _isInitialized) _buildControls(),
           ],
         ),
-        body: Center(
-          child: _isInitialized
-              ? Stack(
-                  alignment: Alignment.bottomCenter,
-                  children: [
-                    Center(
-                      child: AspectRatio(
-                        aspectRatio: _controller.value.aspectRatio,
-                        child: VideoPlayer(_controller),
-                      ),
+      ),
+    );
+  }
+
+  Widget _buildControls() {
+    return Container(
+      color: Colors.black45,
+      child: Column(
+        children: [
+          // Top Bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                BackButton(
+                  color: Colors.white,
+                  onPressed: () {
+                    _reportProgress();
+                    Navigator.pop(context);
+                  },
+                ),
+                Expanded(
+                  child: Text(
+                    _title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
                     ),
-                    // Controls overlay
-                    Container(
-                      color: Colors.black54,
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          VideoProgressIndicator(
-                            _controller,
-                            allowScrubbing: true,
-                            colors: VideoProgressColors(
-                              playedColor: Colors.deepPurple,
-                              bufferedColor: Colors.deepPurple.shade100,
-                              backgroundColor: Colors.grey,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              IconButton(
-                                icon: Icon(
-                                  _controller.value.isPlaying
-                                      ? Icons.pause
-                                      : Icons.play_arrow,
-                                  color: Colors.white,
-                                  size: 32,
-                                ),
-                                onPressed: () {
-                                  setState(() {
-                                    _controller.value.isPlaying
-                                        ? _controller.pause()
-                                        : _controller.play();
-                                  });
-                                },
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.audiotrack, color: Colors.white),
+                  onPressed: () => _showTrackSelector(context, 'audio'),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.subtitles, color: Colors.white),
+                  onPressed: () => _showTrackSelector(context, 'subtitle'),
+                ),
+              ],
+            ),
+          ),
+          const Spacer(),
+          // Play/Pause
+          IconButton(
+            iconSize: 64,
+            icon: Icon(
+              _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
+              color: Colors.white,
+            ),
+            onPressed: () {
+              setState(() {
+                _controller.value.isPlaying
+                    ? _controller.pause()
+                    : _controller.play();
+                _startHideControlsTimer();
+              });
+            },
+          ),
+          const Spacer(),
+          // Bottom Bar
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Text(
+                  _formatDuration(_controller.value.position),
+                  style: const TextStyle(color: Colors.white),
+                ),
+                Expanded(
+                  child: VideoProgressIndicator(
+                    _controller,
+                    allowScrubbing: true,
+                    colors: VideoProgressColors(
+                      playedColor: Theme.of(context).colorScheme.primary,
+                      bufferedColor: Colors.white24,
+                      backgroundColor: Colors.white10,
                     ),
-                  ],
-                )
-              : const CircularProgressIndicator(),
-        ),
+                  ),
+                ),
+                Text(
+                  _formatDuration(_controller.value.duration),
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

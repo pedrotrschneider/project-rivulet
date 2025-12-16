@@ -277,14 +277,12 @@ class _HistoryCard extends ConsumerWidget {
       backgroundColor: Colors.transparent,
       builder: (context) => StreamSelectionSheet(
         externalId: item.mediaId,
-        title:
-            item.seriesName ?? ((item.type == 'movie') ? 'Movie' : 'Episode'),
-        type: item.type == 'episode' ? 'show' : 'movie',
-        season: item.nextSeason ?? item.seasonNumber,
-        episode: item.nextEpisode ?? item.episodeNumber,
+        title: item.type == 'show' ? item.seriesName! : item.title,
+        type: item.type,
+        season: item.isWatched ? item.nextSeason : item.seasonNumber,
+        episode: item.isWatched ? item.nextEpisode : item.episodeNumber,
         startPosition: item.positionTicks,
-        nextSeason: item.nextSeason,
-        nextEpisode: item.nextEpisode,
+        imdbId: item.mediaId,
       ),
     ).then((_) {
       if (context.mounted) {

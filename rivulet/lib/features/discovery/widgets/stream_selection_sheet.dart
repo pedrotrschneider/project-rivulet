@@ -11,8 +11,7 @@ class StreamSelectionSheet extends ConsumerStatefulWidget {
   final int? season;
   final int? episode;
   final int? startPosition;
-  final int? nextSeason;
-  final int? nextEpisode;
+  final String? imdbId;
 
   const StreamSelectionSheet({
     super.key,
@@ -22,8 +21,7 @@ class StreamSelectionSheet extends ConsumerStatefulWidget {
     this.season,
     this.episode,
     this.startPosition,
-    this.nextSeason,
-    this.nextEpisode,
+    this.imdbId,
   });
 
   @override
@@ -144,12 +142,12 @@ class _StreamSelectionSheetState extends ConsumerState<StreamSelectionSheet> {
             builder: (context) => PlayerScreen(
               url: url,
               externalId: widget.externalId,
+              title: widget.title,
               type: widget.type,
               season: widget.season,
               episode: widget.episode,
               startPosition: startPos,
-              nextSeason: widget.nextSeason,
-              nextEpisode: widget.nextEpisode,
+              imdbId: widget.imdbId,
             ),
           ),
         );

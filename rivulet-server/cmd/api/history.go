@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"rivulet_server/internal/db"
 	"rivulet_server/internal/models"
-	"rivulet_server/internal/services"
 	"strconv"
 	"time"
 
@@ -33,17 +32,15 @@ func UpdateProgress(c echo.Context) error {
 	// If API keys missing, we can't fetch metadata for NEW items.
 
 	type ProgressRequest struct {
-		ExternalID string `json:"external_id"` // "tt123", "tmdb:123"
-		Type       string `json:"type"`        // "movie" or "tv"
-		Season     int    `json:"season"`
-		Episode    int    `json:"episode"`
+		ImdbID  string `json:"imdb_id"`
+		Type    string `json:"type"` // "movie" or "tv"
+		Season  int    `json:"season"`
+		Episode int    `json:"episode"`
 
 		PositionTicks int64 `json:"position_ticks"`
 		DurationTicks int64 `json:"duration_ticks"`
 		IsWatched     bool  `json:"is_watched"`
 		Timestamp     int64 `json:"timestamp"`
-		NextSeason    *int  `json:"next_season"`
-		NextEpisode   *int  `json:"next_episode"`
 	}
 
 	var batch []ProgressRequest
@@ -59,58 +56,21 @@ func UpdateProgress(c echo.Context) error {
 		for _, item := range batch {
 			clientTime := time.Unix(item.Timestamp, 0)
 
-			// 1. Ensure Media Exists (Movie or Series)
-			// Helper from services requires Clients
-			// We can import services but `getUserKeys` is local in library.go.
-			// `MdbClient` and `TmdbClient` are globals in api package?
-			// Yes, used in AddToLibrary (exported or local in library.go?).
-			// AddToLibrary line 63 uses `MdbClient`.
-			// So `MdbClient` and `TmdbClient` are available here.
-
-			// standardize type
-			mediaType := item.Type
-			if mediaType == "tv" {
-				mediaType = "series"
-			} // DB uses "series"?
-			// DB models are Movie / Series. EnsureMedia expects "movie" or "series" or "tv"?
-			// EnsureMedia line 21: if mediaType == "movie". Else Series.
-			// Pass "movie" or "tv" generally works if backend handles it.
-			// Re-checking EnsureMedia: It handles "movie" vs else.
-			// But for Series creation, it sets MediaType to passed value? No, LibraryEntry uses passed value.
-			// EnsureMedia doesn't use mediaType for creation other than selecting code path.
-
-			mediaID, err := services.EnsureMedia(MdbClient, TmdbClient, keys.MDBList, keys.TMDB, item.ExternalID, item.Type, profile.ID)
-			if err != nil {
-				// Log and continue? specific failure shouldn't block entire batch?
-				fmt.Println("Error ensuring media:", err)
+			if item.ImdbID == "" {
 				continue
 			}
 
-			// 2. Ensure Episode if TV
-			var episodeID *uuid.UUID
-			if item.Type != "movie" {
-				epID, err := services.EnsureEpisode(TmdbClient, keys.TMDB, mediaID, item.Season, item.Episode)
-				if err == nil {
-					episodeID = &epID
-				} else {
-					fmt.Println("Error ensuring episode:", err)
-					// Verify what to do: Create progress without episode ID?
-					// Model: EpisodeID is nullable. But for Series, having Null EpisodeID usually means "Series Progress" (e.g. at show level).
-					// If we are tracking Episode Progress, we really need the ID.
-					// If fail, maybe skip?
-					continue
-				}
+			mediaType := item.Type
+			if mediaType == "tv" {
+				mediaType = "series"
 			}
 
 			// 3. Upsert Progress
 			var progress models.MediaProgress
 
-			query := tx.Where("profile_id = ? AND media_id = ?", profile.ID, mediaID)
-			if episodeID != nil {
-				query = query.Where("episode_id = ?", episodeID)
-			} else {
-				query = query.Where("episode_id IS NULL")
-			}
+			// Find existing by keys
+			query := tx.Where("profile_id = ? AND imdb_id = ? AND type = ? AND season_number = ? AND episode_number = ?",
+				profile.ID, item.ImdbID, mediaType, item.Season, item.Episode)
 
 			result := query.First(&progress)
 
@@ -121,8 +81,11 @@ func UpdateProgress(c echo.Context) error {
 			}
 
 			progress.ProfileID = profile.ID
-			progress.MediaID = &mediaID
-			progress.EpisodeID = episodeID
+			progress.ImdbID = item.ImdbID
+			progress.Type = mediaType
+			progress.SeasonNumber = item.Season
+			progress.EpisodeNumber = item.Episode
+
 			progress.PositionTicks = item.PositionTicks
 			progress.DurationTicks = item.DurationTicks
 			progress.IsWatched = item.IsWatched
@@ -132,13 +95,41 @@ func UpdateProgress(c echo.Context) error {
 			}
 			progress.LastPlayedAt = clientTime
 
-			if item.NextSeason != nil && item.NextEpisode != nil {
-				// Resolve Next Episode ID
-				nextEpID, err := services.EnsureEpisode(TmdbClient, keys.TMDB, mediaID, *item.NextSeason, *item.NextEpisode)
-				if err == nil {
-					progress.NextEpisodeID = &nextEpID
-				} else {
-					fmt.Println("Error ensuring next episode:", err)
+			// 4. Resolve Next Episode (Backend Driven)
+			progress.NextSeasonNumber = nil
+			progress.NextEpisodeNumber = nil
+
+			if item.Type != "movie" {
+				// User-requested logic: Direct API Lookup (No Local DB for resolving next episode)
+
+				// 1. Resolve IMDB ID -> TMDB ID via MDBList
+				// We need TMDB ID to query TMDB season/episode APIs
+				details, err := MdbClient.GetDetails(keys.MDBList, item.ImdbID, "show")
+				if err == nil && details.TmdbID != 0 {
+					tmdbID := details.TmdbID
+
+					// 2. Check Next Episode in Current Season (S, E+1)
+					// Verify via TMDB API directly
+					nextS := item.Season
+					nextE := item.Episode + 1
+
+					// We check if it exists by trying to fetch details
+					data, err := TmdbClient.GetEpisodeDetails(keys.TMDB, tmdbID, nextS, nextE)
+					if err == nil && data != nil && data.ID != 0 {
+						println("Next episode exists: S" + strconv.Itoa(nextS) + "E" + strconv.Itoa(nextE))
+						progress.NextSeasonNumber = &nextS
+						progress.NextEpisodeNumber = &nextE
+					} else {
+						println("Next episode does not exist: S" + strconv.Itoa(nextS) + "E" + strconv.Itoa(nextE))
+						// 3. Check First Episode of Next Season (S+1, E1)
+						nextS = item.Season + 1
+						nextE = 1
+						data, err := TmdbClient.GetEpisodeDetails(keys.TMDB, tmdbID, nextS, nextE)
+						if err == nil && data != nil && data.ID != 0 {
+							progress.NextSeasonNumber = &nextS
+							progress.NextEpisodeNumber = &nextE
+						}
+					}
 				}
 			}
 
@@ -169,11 +160,7 @@ func GetHistory(c echo.Context) error {
 	}
 
 	// Need keys for fallback fetching
-	keys, err := getUserKeys(userID)
-	if err != nil {
-		// If no keys, we can't fetch remote, but can still return local if available
-		// Log or suppress? Proceed.
-	}
+	// No need for keys as we rely on local metadata populated by UpdateProgress
 
 	limitParam := c.QueryParam("limit")
 	limit := 20
@@ -184,11 +171,10 @@ func GetHistory(c echo.Context) error {
 	}
 
 	var allProgress []models.MediaProgress
-	// Fetch more items than limit to allow for deduplication
-	// e.g. fetch 5x limit to skip over multiple episodes of same show
+	// Fetch more items to allow for deduplication by Series
 	dbLimit := limit * 5
 	if limit > 100 {
-		dbLimit = limit + 100 // Cap the multiplier for large requests
+		dbLimit = limit + 100
 	}
 
 	if err := db.DB.Where("profile_id = ?", profile.ID).
@@ -198,26 +184,24 @@ func GetHistory(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "db error"})
 	}
 
-	// Filter unique MediaID (Series/Movie)
+	// Filter unique Series/Movies
 	var progress []models.MediaProgress
 	seen := make(map[string]bool)
 	for _, p := range allProgress {
 		if len(progress) >= limit {
 			break
 		}
-		// MediaID is the Series ID or Movie ID
-		mid := p.MediaID.String()
-		if seen[mid] {
+		if seen[p.ImdbID] {
 			continue
 		}
-		seen[mid] = true
+		seen[p.ImdbID] = true
 		progress = append(progress, p)
 	}
 
 	// Enrich with Media Data
 	type HistoryResult struct {
-		MediaID       string     `json:"media_id"`             // Changed to string for External ID
-		EpisodeID     *uuid.UUID `json:"episode_id,omitempty"` // Internal is fine for tracking, but navigation needs external context? Frontend uses media_id (series/movie).
+		MediaID       string     `json:"media_id"`             // External ID (tmdb:123 or tt123)
+		EpisodeID     *uuid.UUID `json:"episode_id,omitempty"` // Deprecated but maybe useful? No, we removed it.
 		Type          string     `json:"type"`                 // "movie" or "episode"
 		Title         string     `json:"title"`                // Movie title or "Series - Episode Title"
 		PosterPath    string     `json:"poster_path"`
@@ -241,155 +225,92 @@ func GetHistory(c echo.Context) error {
 
 	for _, p := range progress {
 		var res HistoryResult
-		res.EpisodeID = p.EpisodeID
+		// res.EpisodeID = p.EpisodeID // Removed from model
 		res.PositionTicks = p.PositionTicks
 		res.DurationTicks = p.DurationTicks
 		res.LastPlayedAt = p.LastPlayedAt
-
 		res.IsWatched = p.IsWatched
+		res.SeasonNumber = p.SeasonNumber
+		res.EpisodeNumber = p.EpisodeNumber
 
-		if p.NextEpisodeID != nil {
-			var nextEp models.Episode
-			if err := db.DB.First(&nextEp, p.NextEpisodeID).Error; err == nil {
-				res.NextEpisode = &nextEp.EpisodeNumber
-				res.NextEpisodeTitle = &nextEp.Title
-				var nextSeason models.Season
-				if err := db.DB.First(&nextSeason, nextEp.SeasonID).Error; err == nil {
-					res.NextSeason = &nextSeason.SeasonNumber
-				}
-			}
-		}
+		// Next Episode Defaults
+		res.NextSeason = p.NextSeasonNumber
+		res.NextEpisode = p.NextEpisodeNumber
 
-		// Check Library Status
-		var inLibrary bool
-		var libEntry models.LibraryEntry
-		if err := db.DB.Where("profile_id = ? AND media_id = ?", profile.ID, p.MediaID).First(&libEntry).Error; err == nil {
-			inLibrary = true
-		}
+		// Set Media ID (External Format - IMDB)
+		res.MediaID = p.ImdbID
+		res.Type = p.Type
 
-		if p.EpisodeID != nil {
-			// Series Episode
-			res.Type = "episode"
-			var series models.Series
-			var episode models.Episode
-			var season models.Season
+		// 1. Try Local DB First
+		foundLocal := false
+		var tmdbID int // We might need this for API fallback even if local DB lookup fails
 
-			// Get Series
-			if err := db.DB.First(&series, p.MediaID).Error; err == nil {
-				res.SeriesName = series.Title
-
-				// Resolve External ID (prefer correct IMDB ID for consistency)
-				if val, ok := series.ExternalIDs["imdb"]; ok {
-					res.MediaID = fmt.Sprintf("%v", val)
-				} else if val, ok := series.ExternalIDs["tmdb"]; ok {
-					res.MediaID = fmt.Sprintf("%v", val)
-				} else {
-					res.MediaID = series.ID.String() // Fallback
-				}
-
-				if inLibrary {
-					res.PosterPath = getImagePath(series.ID, "Series", "poster")
-					res.BackdropPath = getImagePath(series.ID, "Series", "backdrop")
-				} else {
-					// Fetch Remote
-					// We need TMDB ID for image fetching
-					if tmdbID, ok := getTmdbID(series.ExternalIDs); ok && keys.TMDB != "" {
-						show, err := TmdbClient.GetTVShowDetails(keys.TMDB, tmdbID)
-						if err == nil {
-							if show.PosterPath != "" {
-								res.PosterPath = "https://image.tmdb.org/t/p/w500" + show.PosterPath
-							}
-							if show.BackdropPath != "" {
-								res.BackdropPath = "https://image.tmdb.org/t/p/w500" + show.BackdropPath
-							}
-						}
-					}
-				}
-			}
-
-			// Get Episode & Season
-			if err := db.DB.First(&episode, p.EpisodeID).Error; err == nil {
-				res.Title = episode.Title
-				res.EpisodeNumber = episode.EpisodeNumber
-
-				if err := db.DB.First(&season, episode.SeasonID).Error; err == nil {
-					res.SeasonNumber = season.SeasonNumber
-				}
+		if p.Type == "movie" {
+			var movie models.Movie
+			if err := db.DB.Where("external_ids ->> 'imdb' = ?", p.ImdbID).First(&movie).Error; err == nil {
+				foundLocal = true
+				res.Title = movie.Title
+				res.PosterPath = getImagePath(movie.ID, "Movie", "poster")
+				res.BackdropPath = getImagePath(movie.ID, "Movie", "backdrop")
 			}
 		} else {
-			// Movie
-			res.Type = "movie"
-			var movie models.Movie
-			if err := db.DB.First(&movie, p.MediaID).Error; err == nil {
-				res.Title = movie.Title
-
-				// External ID (prefer IMDB)
-				if val, ok := movie.ExternalIDs["imdb"]; ok {
-					res.MediaID = fmt.Sprintf("%v", val)
-				} else if val, ok := movie.ExternalIDs["tmdb"]; ok {
-					res.MediaID = fmt.Sprintf("%v", val)
-				} else {
-					res.MediaID = movie.ID.String()
-				}
-
-				if inLibrary {
-					res.PosterPath = getImagePath(movie.ID, "Movie", "poster")
-					res.BackdropPath = getImagePath(movie.ID, "Movie", "backdrop")
-				} else {
-					// Fetch Remote logic remains same (uses TMDB ID for image)
-					if tmdbID, ok := getTmdbID(movie.ExternalIDs); ok && keys.TMDB != "" {
-						// MDBList preference
-						foundMdb := false
-						if keys.MDBList != "" {
-							details, err := MdbClient.GetDetails(keys.MDBList, fmt.Sprintf("tmdb:%d", tmdbID), "movie")
-							if err == nil {
-								res.PosterPath = details.Poster
-								res.BackdropPath = details.Backdrop
-								foundMdb = true
-							}
-						}
-
-						// Fallback to TMDB directly if MDBList failed or key missing
-						if !foundMdb {
-							details, err := TmdbClient.GetMovieDetails(keys.TMDB, tmdbID)
-							if err == nil {
-								if details.PosterPath != "" {
-									res.PosterPath = "https://image.tmdb.org/t/p/w500" + details.PosterPath
-								}
-								if details.BackdropPath != "" {
-									res.BackdropPath = "https://image.tmdb.org/t/p/w500" + details.BackdropPath
-								}
-							}
-						}
-					} else if imdbID, ok := movie.ExternalIDs["imdb"].(string); ok && keys.MDBList != "" {
-						details, err := MdbClient.GetDetails(keys.MDBList, imdbID, "movie")
-						if err == nil {
-							res.PosterPath = details.Poster
-							res.BackdropPath = details.Backdrop
-						}
-					}
-				}
+			// Series
+			var series models.Series
+			if err := db.DB.Where("external_ids ->> 'imdb' = ?", p.ImdbID).First(&series).Error; err == nil {
+				foundLocal = true
+				res.SeriesName = series.Title
+				res.PosterPath = getImagePath(series.ID, "Series", "poster")
+				res.BackdropPath = getImagePath(series.ID, "Series", "backdrop")
 			}
 		}
 
+		keys, err := getUserKeys(userID)
+		if err != nil {
+			return c.JSON(http.StatusForbidden, map[string]string{"error": "no keys found"})
+		}
+		details, err := MdbClient.GetDetails(keys.MDBList, p.ImdbID, p.Type)
+		if err != nil {
+			return c.JSON(http.StatusNotFound, map[string]string{"error": "not found"})
+		}
+		
+		// 2. If Not Found Locally, Use API
+		if !foundLocal {
+			// Fetch Metadata from MDBList
+			// This gives us Title, Poster, Backdrop, and TMDB ID
+			res.PosterPath = details.Poster
+			res.BackdropPath = details.Backdrop
+			if p.Type == "movie" {
+				res.Title = details.Title
+			} else {
+				res.SeriesName = details.Title
+			}
+		}
+		
+		tmdbID = details.TmdbID
+
+		// Fetch Episode Title via TMDB
+		// We need to fetch the season details
+		if p.Type == "show" && tmdbID != 0 {
+			// Current Episode
+			ep, err := TmdbClient.GetEpisodeDetails(keys.TMDB, tmdbID, p.SeasonNumber, p.EpisodeNumber)
+			if err == nil {
+				res.Title = ep.Name
+			} else {
+				res.Title = fmt.Sprintf("S%dE%d", p.SeasonNumber, p.EpisodeNumber)
+			}
+
+			// Next Episode Title (if we know the number)
+			if p.NextSeasonNumber != nil && p.NextEpisodeNumber != nil {
+				nextEp, err := TmdbClient.GetEpisodeDetails(keys.TMDB, tmdbID, *p.NextSeasonNumber, *p.NextEpisodeNumber)
+				if err == nil {
+					res.NextEpisodeTitle = &nextEp.Name
+				}
+			}
+		}
 		results = append(results, res)
 	}
 
 	return c.JSON(http.StatusOK, results)
-}
-
-func getTmdbID(ids map[string]any) (int, bool) {
-	val, ok := ids["tmdb"]
-	if !ok {
-		return 0, false
-	}
-	if f, ok := val.(float64); ok {
-		return int(f), true
-	}
-	if i, ok := val.(int); ok {
-		return i, true
-	}
-	return 0, false
 }
 
 // DELETE /history/:media_id
@@ -401,14 +322,51 @@ func DeleteHistory(c echo.Context) error {
 	}
 
 	mediaID := c.Param("media_id")
+	// mediaID format: "tt123" or "tmdb:123" (legacy?) or UUID
 
-	// Delete all progress for this media (Series or Movie)
-	// If it is a series, we might want to delete all episodes progress?
-	// The param is likely the UUID of the Movie or Series.
-	// Our Model `MediaID` stores exactly that.
+	// We need to resolve to IMDb ID to delete from MediaProgress
+	var imdbID string
 
-	if err := db.DB.Where("profile_id = ? AND media_id = ?", profile.ID, mediaID).Delete(&models.MediaProgress{}).Error; err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "db error"})
+	if len(mediaID) > 2 && mediaID[:2] == "tt" {
+		imdbID = mediaID
+	} else if len(mediaID) > 5 && mediaID[:5] == "tmdb:" {
+		// Resolve TMDB to IMDb if passed?
+		// Try finding by TMDB ID
+		tmdbIDPart := mediaID[5:]
+		var movie models.Movie
+		if err := db.DB.Where("external_ids ->> 'tmdb' = ?", tmdbIDPart).First(&movie).Error; err == nil {
+			if id, ok := movie.ExternalIDs["imdb"].(string); ok {
+				imdbID = id
+			}
+		} else {
+			var series models.Series
+			if err := db.DB.Where("external_ids ->> 'tmdb' = ?", tmdbIDPart).First(&series).Error; err == nil {
+				if id, ok := series.ExternalIDs["imdb"].(string); ok {
+					imdbID = id
+				}
+			}
+		}
+	} else {
+		// Try finding movie or series by UUID or exact match
+		var movie models.Movie
+		if err := db.DB.Where("id::text = ?", mediaID).First(&movie).Error; err == nil {
+			if id, ok := movie.ExternalIDs["imdb"].(string); ok {
+				imdbID = id
+			}
+		} else {
+			var series models.Series
+			if err := db.DB.Where("id::text = ?", mediaID).First(&series).Error; err == nil {
+				if id, ok := series.ExternalIDs["imdb"].(string); ok {
+					imdbID = id
+				}
+			}
+		}
+	}
+
+	if imdbID != "" {
+		if err := db.DB.Where("profile_id = ? AND imdb_id = ?", profile.ID, imdbID).Delete(&models.MediaProgress{}).Error; err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "db error"})
+		}
 	}
 
 	return c.JSON(http.StatusOK, map[string]bool{"success": true})
@@ -422,126 +380,121 @@ func GetMediaHistory(c echo.Context) error {
 	}
 
 	externalID := c.QueryParam("external_id")
-	mediaType := c.QueryParam("type") // "movie" or "tv"/"series"
+	// mediaType := c.QueryParam("type")
 
 	if externalID == "" {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "missing external_id"})
 	}
 
-	var mediaID uuid.UUID
-	found := false
+	imdbID := ""
 
-	// Find the Internal Media ID
-	if mediaType == "movie" {
+	// Resolve IMDb ID
+	if len(externalID) > 2 && externalID[:2] == "tt" {
+		imdbID = externalID
+	} else if len(externalID) > 5 && externalID[:5] == "tmdb:" {
+		// Resolve TMDB to IMDb
+		tmdbPart := externalID[5:]
 		var movie models.Movie
-		// Postgres JSONB query
-		if err := db.DB.Where("profile_id = ? AND (external_ids ->> 'imdb' = ? OR external_ids ->> 'tmdb' = ?)", profile.ID, externalID, externalID).First(&movie).Error; err == nil {
-			mediaID = movie.ID
-			found = true
+		if err := db.DB.Where("external_ids ->> 'tmdb' = ?", tmdbPart).First(&movie).Error; err == nil {
+			if id, ok := movie.ExternalIDs["imdb"].(string); ok {
+				imdbID = id
+			}
+		} else {
+			var series models.Series
+			if err := db.DB.Where("external_ids ->> 'tmdb' = ?", tmdbPart).First(&series).Error; err == nil {
+				if id, ok := series.ExternalIDs["imdb"].(string); ok {
+					imdbID = id
+				}
+			}
 		}
 	} else {
-		var series models.Series
-		if err := db.DB.Where("profile_id = ? AND (external_ids ->> 'imdb' = ? OR external_ids ->> 'tmdb' = ?)", profile.ID, externalID, externalID).First(&series).Error; err == nil {
-			mediaID = series.ID
-			found = true
-		}
+		// Assume UUID?
 	}
 
-	if !found {
+	if imdbID == "" {
 		return c.JSON(http.StatusOK, []interface{}{})
 	}
 
 	var progress []models.MediaProgress
-	if err := db.DB.Where("profile_id = ? AND media_id = ?", profile.ID, mediaID).
+	if err := db.DB.Where("profile_id = ? AND imdb_id = ?", profile.ID, imdbID).
 		Order("last_played_at desc").
 		Find(&progress).Error; err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "db error"})
 	}
 
-	// Map to simplified result or reusable struct
-	// Reusing HistoryResult structure but without the complex enrichment/deduplication
-	// We mainly need EpisodeID, Season/Episode numbers, Watched status, Position.
-
 	type SimpleHistory struct {
-		MediaID          string     `json:"media_id"`
-		EpisodeID        *uuid.UUID `json:"episode_id,omitempty"`
-		Title            *string    `json:"title,omitempty"`
-		SeasonNumber     int        `json:"season_number,omitempty"`
-		EpisodeNumber    int        `json:"episode_number,omitempty"`
-		PositionTicks    int64      `json:"position_ticks"`
-		DurationTicks    int64      `json:"duration_ticks"`
-		IsWatched        bool       `json:"is_watched"`
-		LastPlayedAt     time.Time  `json:"last_played_at"`
-		LastMagnet       string     `json:"last_magnet"`
-		LastFileIndex    *int       `json:"last_file_index"`
-		NextSeason       *int       `json:"next_season"`
-		NextEpisode      *int       `json:"next_episode"`
-		NextEpisodeTitle *string    `json:"next_episode_title"`
+		MediaID          string    `json:"media_id"`
+		Title            *string   `json:"title,omitempty"`
+		SeasonNumber     int       `json:"season_number,omitempty"`
+		EpisodeNumber    int       `json:"episode_number,omitempty"`
+		PositionTicks    int64     `json:"position_ticks"`
+		DurationTicks    int64     `json:"duration_ticks"`
+		IsWatched        bool      `json:"is_watched"`
+		LastPlayedAt     time.Time `json:"last_played_at"`
+		NextSeason       *int      `json:"next_season"`
+		NextEpisode      *int      `json:"next_episode"`
+		NextEpisodeTitle *string   `json:"next_episode_title"`
 	}
 
 	var results []SimpleHistory
+
+	// Optimize: Fetch Series/Movie Once
+	var series models.Series // Reuse for getting episode titles
+	// var movie models.Movie
+
+	var seriesID uuid.UUID
+	if len(progress) > 0 {
+		if progress[0].Type != "movie" {
+			if err := db.DB.Where("external_ids ->> 'imdb' = ?", imdbID).First(&series).Error; err == nil {
+				seriesID = series.ID
+			}
+		}
+	}
+
 	for _, p := range progress {
 		var s SimpleHistory
+		s.MediaID = imdbID
 
-		// Load Media to get External ID
-		if p.EpisodeID != nil {
-			// Series
-			var series models.Series
-			if err := db.DB.First(&series, p.MediaID).Error; err == nil {
-				if val, ok := series.ExternalIDs["imdb"]; ok {
-					s.MediaID = fmt.Sprintf("%v", val)
-				} else if val, ok := series.ExternalIDs["tmdb"]; ok {
-					s.MediaID = fmt.Sprintf("%v", val)
-				} else {
-					s.MediaID = series.ID.String()
-				}
-			}
-		} else {
-			// Movie
-			var movie models.Movie
-			if err := db.DB.First(&movie, p.MediaID).Error; err == nil {
-				if val, ok := movie.ExternalIDs["imdb"]; ok {
-					s.MediaID = fmt.Sprintf("%v", val)
-				} else if val, ok := movie.ExternalIDs["tmdb"]; ok {
-					s.MediaID = fmt.Sprintf("%v", val)
-				} else {
-					s.MediaID = movie.ID.String()
-				}
-			}
-		}
-
-		if s.MediaID == "" && p.MediaID != nil {
-			s.MediaID = p.MediaID.String() // Fallback
-		}
-		s.EpisodeID = p.EpisodeID
 		s.PositionTicks = p.PositionTicks
 		s.DurationTicks = p.DurationTicks
 		s.IsWatched = p.IsWatched
 		s.LastPlayedAt = p.LastPlayedAt
 
-		if p.NextEpisodeID != nil {
-			var nextEp models.Episode
-			if err := db.DB.First(&nextEp, p.NextEpisodeID).Error; err == nil {
-				s.NextEpisode = &nextEp.EpisodeNumber
-				s.NextEpisodeTitle = &nextEp.Title
-				var nextSeason models.Season
-				if err := db.DB.First(&nextSeason, nextEp.SeasonID).Error; err == nil {
-					s.NextSeason = &nextSeason.SeasonNumber
+		s.SeasonNumber = p.SeasonNumber
+		s.EpisodeNumber = p.EpisodeNumber
+		s.NextSeason = p.NextSeasonNumber
+		s.NextEpisode = p.NextEpisodeNumber
+
+		if p.Type == "movie" {
+			// Title from movie table?
+			// We already resolved ID from it if we did the lookup.
+			// Just return simple info.
+		} else if seriesID != uuid.Nil {
+			// Resolve Titles
+			var ep models.Episode
+			// Use JOIN logic to find episode by season number and episode number without Season ID
+			if err := db.DB.Table("episodes").
+				Joins("JOIN seasons ON episodes.season_id = seasons.id").
+				Where("seasons.series_id = ? AND seasons.season_number = ? AND episodes.episode_number = ?",
+					seriesID, p.SeasonNumber, p.EpisodeNumber).
+				Select("episodes.title").
+				Scan(&ep).Error; err == nil {
+				s.Title = &ep.Title
+			}
+
+			if p.NextSeasonNumber != nil && p.NextEpisodeNumber != nil {
+				var nextEp models.Episode
+				if err := db.DB.Table("episodes").
+					Joins("JOIN seasons ON episodes.season_id = seasons.id").
+					Where("seasons.series_id = ? AND seasons.season_number = ? AND episodes.episode_number = ?",
+						seriesID, *p.NextSeasonNumber, *p.NextEpisodeNumber).
+					Select("episodes.title").
+					Scan(&nextEp).Error; err == nil {
+					s.NextEpisodeTitle = &nextEp.Title
 				}
 			}
 		}
 
-		if p.EpisodeID != nil {
-			var ep models.Episode
-			if err := db.DB.Select("season_id, episode_number, title").First(&ep, p.EpisodeID).Error; err == nil {
-				s.EpisodeNumber = ep.EpisodeNumber
-				s.Title = &ep.Title
-				var sea models.Season
-				if err := db.DB.Select("season_number").First(&sea, ep.SeasonID).Error; err == nil {
-					s.SeasonNumber = sea.SeasonNumber
-				}
-			}
-		}
 		results = append(results, s)
 	}
 
