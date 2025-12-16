@@ -33,7 +33,7 @@ func Connect() {
 		// auth
 		&models.Account{},
 		&models.Profile{},
-		
+
 		// media
 		&models.Movie{},
 		&models.Series{},
@@ -42,10 +42,13 @@ func Connect() {
 		&models.Person{},
 		&models.Credit{},
 		&models.Image{},
-		
+
 		// library
 		&models.LibraryEntry{},
 		&models.MediaProgress{},
+
+		// favorites
+		&models.FavoriteTorrent{},
 	)
 	if err != nil {
 		log.Fatal("❌ Migration failed:", err)

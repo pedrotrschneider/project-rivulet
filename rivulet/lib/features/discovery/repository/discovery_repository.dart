@@ -62,6 +62,29 @@ class DiscoveryRepository {
     await _dio.delete('/library/$id');
   }
 
+  Future<void> addFavoriteStream(String mediaId, String hash) async {
+    await _dio.post('/favorites', data: {'media_id': mediaId, 'hash': hash});
+  }
+
+  Future<void> removeFavoriteStream(String mediaId, String hash) async {
+    await _dio.delete('/favorites', data: {'media_id': mediaId, 'hash': hash});
+  }
+
+  Future<List<String>> checkFavoriteStreams(
+    String mediaId,
+    List<String> hashes,
+  ) async {
+    try {
+      final response = await _dio.post(
+        '/favorites/check',
+        data: {'media_id': mediaId, 'hashes': hashes},
+      );
+      return List<String>.from(response.data);
+    } catch (_) {
+      return [];
+    }
+  }
+
   Future<List<StreamResult>> scrapeStreams({
     required String externalId,
     required String type,

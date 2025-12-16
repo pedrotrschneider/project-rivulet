@@ -60,6 +60,12 @@ func Start() {
 	v1.GET("/profiles", ListProfiles)
 	v1.POST("/profiles", CreateProfile)
 
+	// Favorites
+	favorites := v1.Group("/favorites")
+	favorites.POST("", AddFavorite)
+	favorites.DELETE("", RemoveFavorite)
+	favorites.POST("/check", CheckFavorites)
+
 	// Library
 	library := v1.Group("/library")
 	library.POST("", AddToLibrary)
