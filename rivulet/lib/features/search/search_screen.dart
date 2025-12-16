@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rivulet/features/discovery/discovery_provider.dart';
+import 'package:rivulet/features/discovery/repository/discovery_repository.dart';
+import 'package:rivulet/features/discovery/domain/discovery_models.dart';
+import 'package:rivulet/features/auth/auth_provider.dart';
 import 'package:rivulet/features/discovery/screens/media_detail_screen.dart';
+import 'package:rivulet/features/player/player_screen.dart';
 
 class DiscoveryScreen extends ConsumerStatefulWidget {
   const DiscoveryScreen({super.key});
@@ -12,6 +16,13 @@ class DiscoveryScreen extends ConsumerStatefulWidget {
 
 class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
   final TextEditingController _controller = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Refresh history when screen is mounted (e.g. tab switch)
+    Future.microtask(() => ref.invalidate(historyProvider));
+  }
 
   void _performSearch() {
     if (_controller.text.isNotEmpty) {
@@ -51,57 +62,83 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
             ),
           ),
           Expanded(
-            child: searchState.when(
-              data: (items) {
-                if (items.isEmpty) {
-                  return const Center(
-                    child: Text('Search for something to start watching'),
-                  );
-                }
+            child: CustomScrollView(
+              slivers: [
+                // 1. History Section (Always Visible)
+                const _HistorySection(),
 
-                // Split into categories
-                final movies = items.where((i) => i.type == 'movie').toList();
-                final shows = items.where((i) => i.type != 'movie').toList();
-
-                return CustomScrollView(
-                  slivers: [
-                    if (movies.isNotEmpty) ...[
-                      const SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
-                          child: Text(
-                            'Movies',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
+                // 2. Search Results
+                ...searchState.when(
+                  data: (items) {
+                    if (items.isEmpty) {
+                      return [
+                        const SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: Center(
+                            child: Text(
+                              'Search for something to start watching',
                             ),
                           ),
                         ),
-                      ),
-                      _buildGrid(movies),
-                      const SliverToBoxAdapter(child: SizedBox(height: 24)),
-                    ],
-                    if (shows.isNotEmpty) ...[
-                      const SliverToBoxAdapter(
-                        child: Padding(
-                          padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
-                          child: Text(
-                            'TV Shows',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
+                      ];
+                    }
+
+                    final movies = items
+                        .where((i) => i.type == 'movie')
+                        .toList();
+                    final shows = items
+                        .where((i) => i.type != 'movie')
+                        .toList();
+
+                    return [
+                      if (movies.isNotEmpty) ...[
+                        const SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
+                            child: Text(
+                              'Movies',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      _buildGrid(shows),
-                      const SliverToBoxAdapter(child: SizedBox(height: 24)),
-                    ],
+                        _buildGrid(movies),
+                        const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                      ],
+                      if (shows.isNotEmpty) ...[
+                        const SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+                            child: Text(
+                              'TV Shows',
+                              style: TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                        _buildGrid(shows),
+                        const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                      ],
+                    ];
+                  },
+                  error: (err, stack) => [
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(child: Text('Error: $err')),
+                    ),
                   ],
-                );
-              },
-              error: (err, stack) => Center(child: Text('Error: $err')),
-              loading: () => const Center(child: CircularProgressIndicator()),
+                  loading: () => [
+                    const SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ],
@@ -175,3 +212,257 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
     );
   }
 }
+
+class _HistorySection extends ConsumerWidget {
+  const _HistorySection();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final historyAsync = ref.watch(historyProvider);
+
+    return historyAsync.when(
+      data: (history) {
+        if (history.isEmpty)
+          return const SliverToBoxAdapter(child: SizedBox.shrink());
+
+        final continueWatching = history;
+
+        return SliverToBoxAdapter(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (continueWatching.isNotEmpty) ...[
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Text(
+                    'Continue Watching',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                ),
+                SizedBox(
+                  height: 160,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    scrollDirection: Axis.horizontal,
+                    itemCount: continueWatching.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 12),
+                    itemBuilder: (context, index) {
+                      final item = continueWatching[index];
+                      return _HistoryCard(item: item);
+                    },
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+      error: (e, s) =>
+          SliverToBoxAdapter(child: Text('Error loading history: $e')),
+      loading: () => const SliverToBoxAdapter(child: SizedBox.shrink()),
+    );
+  }
+}
+
+class _HistoryCard extends ConsumerWidget {
+  final HistoryItem item;
+
+  const _HistoryCard({required this.item});
+
+  Future<void> _resumePlayback(BuildContext context, WidgetRef ref) async {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Resuming playback...'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+
+    try {
+      final repo = ref.read(discoveryRepositoryProvider);
+      final result = await repo.resolveStream(
+        magnet: item.lastMagnet,
+        season: item.seasonNumber,
+        episode: item.episodeNumber,
+        fileIndex: item.lastFileIndex,
+      );
+
+      if (!context.mounted) return;
+
+      final url = result['url'] as String?;
+      final resultFileIndex = result['file_index'] as int?;
+
+      if (url != null && url.isNotEmpty) {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => PlayerScreen(
+              url: url,
+              externalId: item.mediaId,
+              type: item.type == 'episode' ? 'tv' : 'movie',
+              season: item.seasonNumber,
+              episode: item.episodeNumber,
+              magnet: item.lastMagnet,
+              startPosition: item.positionTicks,
+              fileIndex: resultFileIndex ?? item.lastFileIndex,
+            ),
+          ),
+        );
+        // Refresh history after playback
+        if (context.mounted) {
+          ref.invalidate(historyProvider);
+        }
+      } else {
+        throw Exception("Could not resolve stream URL");
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Failed to resume: $e')));
+
+      // Fallback to details
+      if (context.mounted) {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => MediaDetailScreen(
+              itemId: item.mediaId,
+              type: item.type == 'episode' ? 'tv' : 'movie',
+            ),
+          ),
+        );
+        if (context.mounted) {
+          ref.invalidate(historyProvider);
+        }
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Safer image URL construction
+    final serverUrl = '${ref.watch(serverUrlProvider) ?? ''}/api/v1';
+    String imageUrl = '';
+
+    // Helper to join URL parts cleanly
+    String joinUrl(String base, String path) {
+      if (base.isEmpty) return path;
+      if (base.endsWith('/') && path.startsWith('/')) {
+        return '$base${path.substring(1)}';
+      }
+      if (!base.endsWith('/') && !path.startsWith('/')) {
+        return '$base/$path';
+      }
+      return '$base$path';
+    }
+
+    if (item.backdropPath.isNotEmpty) {
+      imageUrl = item.backdropPath.startsWith('/')
+          ? joinUrl(serverUrl, item.backdropPath)
+          : item.backdropPath;
+    } else if (item.posterPath.isNotEmpty) {
+      imageUrl = item.posterPath.startsWith('/')
+          ? joinUrl(serverUrl, item.posterPath)
+          : item.posterPath;
+    }
+
+    return SizedBox(
+      width: 280,
+      child: InkWell(
+        onTap: () async {
+          if (item.lastMagnet.isNotEmpty) {
+            await _resumePlayback(context, ref);
+          } else {
+            await Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => MediaDetailScreen(
+                  itemId: item.mediaId,
+                  type: item.type == 'episode' ? 'tv' : 'movie',
+                ),
+              ),
+            );
+            // Refresh history after potential playback from details
+            if (context.mounted) {
+              ref.invalidate(historyProvider);
+            }
+          }
+        },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      imageUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: Colors.grey[800],
+                        child: const Icon(Icons.broken_image),
+                      ),
+                    ),
+                  ),
+                  Center(
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: const BoxDecoration(
+                        color: Colors.black54,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.play_arrow, color: Colors.white),
+                    ),
+                  ),
+                  if (!item.isWatched)
+                    Positioned(
+                      bottom: 0,
+                      left: 0,
+                      right: 0,
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                          bottom: Radius.circular(8),
+                        ),
+                        child: LinearProgressIndicator(
+                          value: item.durationTicks > 0
+                              ? item.positionTicks / item.durationTicks
+                              : 0,
+                          color: Colors.deepPurple,
+                          backgroundColor: Colors.black26,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              item.seriesName != null
+                  ? '${item.seriesName}'
+                  : item.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            if (item.seasonNumber != null)
+              Text(
+                item.isWatched ? 'S${item.nextSeason} E${item.nextEpisode}' : 'S${item.seasonNumber} E${item.episodeNumber}',
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            if (!item.isWatched && item.seasonNumber != null)
+              Text(
+                item.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+final historyProvider = FutureProvider<List<HistoryItem>>((ref) async {
+  final repo = ref.watch(discoveryRepositoryProvider);
+  return repo.getHistory();
+});

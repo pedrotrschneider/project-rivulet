@@ -142,6 +142,7 @@ class DiscoverySeason {
   final String? posterPath;
   final int seasonNumber;
   final String? airDate;
+  final int episodeCount;
 
   DiscoverySeason({
     required this.id,
@@ -149,6 +150,7 @@ class DiscoverySeason {
     this.posterPath,
     required this.seasonNumber,
     this.airDate,
+    required this.episodeCount,
   });
 
   factory DiscoverySeason.fromJson(Map<String, dynamic> json) {
@@ -158,6 +160,7 @@ class DiscoverySeason {
       posterPath: json['poster_path'] as String?,
       seasonNumber: json['season_number'] as int? ?? 0,
       airDate: json['air_date'] as String?,
+      episodeCount: json['episode_count'] as int? ?? 0,
     );
   }
 }
@@ -267,6 +270,82 @@ class StreamResult {
       quality: json['quality'] as String? ?? 'Unknown',
       source: json['source'] as String? ?? 'Unknown',
       fileIndex: json['file_index'] as int?,
+    );
+  }
+}
+
+class HistoryItem {
+  final String mediaId;
+  final String? episodeId;
+  final String type;
+  final String title;
+  final String posterPath;
+  final String backdropPath;
+  final int positionTicks;
+  final int durationTicks;
+  final String lastPlayedAt;
+  final String lastMagnet;
+  final String? seriesName;
+  final bool isWatched;
+  final int? seasonNumber;
+  final int? episodeNumber;
+  final int? lastFileIndex;
+  final int? nextSeason;
+  final int? nextEpisode;
+
+  HistoryItem({
+    required this.mediaId,
+    this.episodeId,
+    required this.type,
+    required this.title,
+    required this.posterPath,
+    required this.backdropPath,
+    required this.positionTicks,
+    required this.durationTicks,
+    required this.lastPlayedAt,
+    required this.lastMagnet,
+    this.seriesName,
+    this.isWatched = false,
+    this.seasonNumber,
+    this.episodeNumber,
+    this.lastFileIndex,
+    this.nextSeason,
+    this.nextEpisode,
+  });
+
+  factory HistoryItem.fromJson(Map<String, dynamic> json) {
+    return HistoryItem(
+      mediaId: json['media_id']?.toString() ?? '',
+      episodeId: json['episode_id']?.toString(),
+      type: json['type']?.toString() ?? 'movie',
+      title: json['title']?.toString() ?? 'Unknown',
+      posterPath: json['poster_path']?.toString() ?? '',
+      backdropPath: json['backdrop_path']?.toString() ?? '',
+      positionTicks: (json['position_ticks'] as num?)?.toInt() ?? 0,
+      durationTicks: (json['duration_ticks'] as num?)?.toInt() ?? 0,
+      lastPlayedAt: json['last_played_at']?.toString() ?? '',
+      lastMagnet: json['last_magnet']?.toString() ?? '',
+      seriesName: json['series_name']?.toString(),
+      isWatched: json['is_watched'] as bool? ?? false,
+      seasonNumber: (json['season_number'] as num?)?.toInt(),
+      episodeNumber: (json['episode_number'] as num?)?.toInt(),
+      lastFileIndex: (json['last_file_index'] as num?)?.toInt(),
+      nextSeason: (json['next_season'] as num?)?.toInt(),
+      nextEpisode: (json['next_episode'] as num?)?.toInt(),
+    );
+  }
+
+  factory HistoryItem.empty() {
+    return HistoryItem(
+      mediaId: '',
+      type: 'movie',
+      title: '',
+      posterPath: '',
+      backdropPath: '',
+      positionTicks: 0,
+      durationTicks: 0,
+      lastPlayedAt: '',
+      lastMagnet: '',
     );
   }
 }

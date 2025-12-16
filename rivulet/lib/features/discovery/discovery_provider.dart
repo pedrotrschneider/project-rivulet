@@ -65,3 +65,14 @@ Future<List<StreamResult>> streamScraper(
         episode: episode,
       );
 }
+
+@riverpod
+Future<List<HistoryItem>> mediaHistory(
+  Ref ref, {
+  required String externalId,
+  required String type,
+}) {
+  return ref
+      .read(discoveryRepositoryProvider)
+      .getMediaHistory(externalId, type);
+}

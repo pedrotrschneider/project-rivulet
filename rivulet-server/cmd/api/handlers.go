@@ -47,7 +47,6 @@ type ResolveRequest struct {
 	FileIndex *int   `json:"file_index,omitempty"`
 }
 
-
 // Helper to find the file ID for a specific episode
 func findFileID(files []realdebrid.File, season, episode int, fileIndex *int) (string, error) {
 	// 1. If it's a movie (Season 0), return the largest file
@@ -69,21 +68,21 @@ func findFileID(files []realdebrid.File, season, episode int, fileIndex *int) (s
 		targetIdx := *fileIndex + 1
 
 		for _, f := range files {
-            if f.ID == targetIdx {
-                 return fmt.Sprintf("%d", f.ID), nil
-            }
-        }
-        
-        // Sanity check bounds
-        if targetIdx >= 0 && targetIdx < len(files) {
-            candidate := files[targetIdx]
-            lower := strings.ToLower(candidate.Path)
-            if strings.HasSuffix(lower, ".mkv") || 
-			   strings.HasSuffix(lower, ".mp4") || 
-			   strings.HasSuffix(lower, ".avi") {
+			if f.ID == targetIdx {
+				return fmt.Sprintf("%d", f.ID), nil
+			}
+		}
+
+		// Sanity check bounds
+		if targetIdx >= 0 && targetIdx < len(files) {
+			candidate := files[targetIdx]
+			lower := strings.ToLower(candidate.Path)
+			if strings.HasSuffix(lower, ".mkv") ||
+				strings.HasSuffix(lower, ".mp4") ||
+				strings.HasSuffix(lower, ".avi") {
 				return fmt.Sprintf("%d", candidate.ID), nil
-            }
-        }
+			}
+		}
 	}
 
 	// If all else fails, fallback to regex approach
@@ -93,9 +92,9 @@ func findFileID(files []realdebrid.File, season, episode int, fileIndex *int) (s
 	for _, f := range files {
 		// Only look at video files (mkv, mp4, avi) to avoid matching "S01E01.nfo"
 		lowerPath := strings.ToLower(f.Path)
-		if !strings.HasSuffix(lowerPath, ".mkv") && 
-		   !strings.HasSuffix(lowerPath, ".mp4") && 
-		   !strings.HasSuffix(lowerPath, ".avi") {
+		if !strings.HasSuffix(lowerPath, ".mkv") &&
+			!strings.HasSuffix(lowerPath, ".mp4") &&
+			!strings.HasSuffix(lowerPath, ".avi") {
 			continue
 		}
 
@@ -117,7 +116,7 @@ func ResolveStream(c echo.Context) error {
 	if keys.RD == "" {
 		return c.JSON(http.StatusConflict, map[string]string{"error": "RealDebrid API key not configured"})
 	}
-	
+
 	var req ResolveRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid json"})
@@ -153,7 +152,7 @@ func ResolveStream(c echo.Context) error {
 	}
 
 	// 5. Find the Unrestrict Link
-	
+
 	if info.Status == "downloaded" {
 		targetLink := ""
 		if len(info.Links) == 1 {
@@ -167,10 +166,15 @@ func ResolveStream(c echo.Context) error {
 		if targetLink != "" {
 			unrestricted, err := RdClient.UnrestrictLink(keys.RD, targetLink)
 			if err == nil {
+				// Helper to parse string ID back to int for frontend consistency
+				// User note: RD IDs are 1-based, but we deal with 0-based indexes.
+				// We must return ID - 1 so that when it comes back, we add 1 to get the ID again.
+				fIdx, _ := strconv.Atoi(targetFileID)
 				return c.JSON(http.StatusOK, map[string]interface{}{
-					"status":  "cached",
-					"url":     unrestricted.Download,
-					"file_id": torrentID,
+					"status":     "cached",
+					"url":        unrestricted.Download,
+					"file_id":    torrentID,
+					"file_index": fIdx - 1,
 				})
 			}
 		}
@@ -376,12 +380,12 @@ func GetSeasonEpisodes(c echo.Context) error {
 	// 2. Parse Params
 	idParam := c.Param("id")
 	seasonParam := c.Param("num")
-	
+
 	tmdbID, _ := strconv.Atoi(idParam)
 	if len(idParam) > 2 && idParam[:2] == "tm" {
 		tmdbID, _ = strconv.Atoi(idParam[2:])
 	}
-	
+
 	seasonNum, err := strconv.Atoi(seasonParam)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "invalid season number"})

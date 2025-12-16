@@ -33,15 +33,15 @@ type SearchResponse struct {
 }
 
 type Result struct {
-	ID           int     `json:"id"`
-	Title        string  `json:"title,omitempty"`        // Movie
-	Name         string  `json:"name,omitempty"`         // TV Show
-	PosterPath   string  `json:"poster_path"`
-	BackdropPath string  `json:"backdrop_path"`
-	MediaType    string  `json:"media_type"`             // "movie", "tv", "person"
-	ReleaseDate  string  `json:"release_date,omitempty"` // Movie
-	FirstAirDate string  `json:"first_air_date,omitempty"` // TV
-	Overview     string  `json:"overview"`
+	ID           int    `json:"id"`
+	Title        string `json:"title,omitempty"` // Movie
+	Name         string `json:"name,omitempty"`  // TV Show
+	PosterPath   string `json:"poster_path"`
+	BackdropPath string `json:"backdrop_path"`
+	MediaType    string `json:"media_type"`               // "movie", "tv", "person"
+	ReleaseDate  string `json:"release_date,omitempty"`   // Movie
+	FirstAirDate string `json:"first_air_date,omitempty"` // TV
+	Overview     string `json:"overview"`
 }
 
 type ImagesResponse struct {
@@ -55,12 +55,15 @@ type Image struct {
 }
 
 type TVShowDetails struct {
-	Seasons []struct {
+	PosterPath   string `json:"poster_path"`
+	BackdropPath string `json:"backdrop_path"`
+	Seasons      []struct {
 		ID           int    `json:"id"`
 		Name         string `json:"name"`
 		Overview     string `json:"overview"`
 		PosterPath   string `json:"poster_path"`
 		SeasonNumber int    `json:"season_number"`
+		EpisodeCount int    `json:"episode_count"`
 		AirDate      string `json:"air_date"`
 	} `json:"seasons"`
 }
@@ -76,14 +79,14 @@ type SeasonDetails struct {
 }
 
 type Episode struct {
-	AirDate        string  `json:"air_date"`
-	EpisodeNumber  int     `json:"episode_number"`
-	ID             int     `json:"id"`
-	Name           string  `json:"name"`
-	Overview       string  `json:"overview"`
-	StillPath      string  `json:"still_path"`
-	VoteAverage    float64 `json:"vote_average"`
-	Runtime        int     `json:"runtime"`
+	AirDate       string  `json:"air_date"`
+	EpisodeNumber int     `json:"episode_number"`
+	ID            int     `json:"id"`
+	Name          string  `json:"name"`
+	Overview      string  `json:"overview"`
+	StillPath     string  `json:"still_path"`
+	VoteAverage   float64 `json:"vote_average"`
+	Runtime       int     `json:"runtime"`
 }
 
 // --- Methods ---
@@ -217,6 +220,55 @@ func (c *Client) GetSeasonDetails(apiKey string, tmdbID, seasonNum int) (*Season
 		if details.Episodes[i].StillPath != "" {
 			details.Episodes[i].StillPath = ImageBase + details.Episodes[i].StillPath
 		}
+	}
+
+	return &details, nil
+}
+
+// GetEpisodeDetails fetches a specific episode
+func (c *Client) GetEpisodeDetails(apiKey string, tmdbID, seasonNum, episodeNum int) (*Episode, error) {
+	u := fmt.Sprintf("%s/tv/%d/season/%d/episode/%d?api_key=%s&language=en-US", BaseURL, tmdbID, seasonNum, episodeNum, apiKey)
+
+	resp, err := c.HttpClient.Get(u)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var episode Episode
+	if err := json.NewDecoder(resp.Body).Decode(&episode); err != nil {
+		return nil, err
+	}
+
+	if episode.StillPath != "" {
+		episode.StillPath = ImageBase + episode.StillPath
+	}
+
+	return &episode, nil
+}
+
+type MovieDetails struct {
+	ID           int    `json:"id"`
+	Title        string `json:"title"`
+	PosterPath   string `json:"poster_path"`
+	BackdropPath string `json:"backdrop_path"`
+	Overview     string `json:"overview"`
+	ReleaseDate  string `json:"release_date"`
+}
+
+// GetMovieDetails fetches movie info
+func (c *Client) GetMovieDetails(apiKey string, tmdbID int) (*MovieDetails, error) {
+	u := fmt.Sprintf("%s/movie/%d?api_key=%s&language=en-US", BaseURL, tmdbID, apiKey)
+
+	resp, err := c.HttpClient.Get(u)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var details MovieDetails
+	if err := json.NewDecoder(resp.Body).Decode(&details); err != nil {
+		return nil, err
 	}
 
 	return &details, nil

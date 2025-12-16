@@ -123,6 +123,46 @@ class DiscoveryRepository {
     );
     return response.data as Map<String, dynamic>;
   }
+
+  Future<List<HistoryItem>> getHistory({int limit = 20}) async {
+    final response = await _dio.get(
+      '/history',
+      queryParameters: {'limit': limit},
+    );
+    if (response.data == null) return [];
+    final data = response.data;
+    if (data is! List) return [];
+    return data.map((json) => HistoryItem.fromJson(json)).toList();
+  }
+
+  Future<List<HistoryItem>> getMediaHistory(
+    String externalId,
+    String type,
+  ) async {
+    final response = await _dio.get(
+      '/history/media',
+      queryParameters: {'external_id': externalId, 'type': type},
+    );
+    if (response.data == null) return [];
+    final data = response.data;
+    if (data is! List) return [];
+    return data.map((json) => HistoryItem.fromJson(json)).toList();
+  }
+
+  Future<void> deleteHistory(String mediaId) async {
+    await _dio.delete('/history/$mediaId');
+  }
+
+  Future<void> updateProgress(List<Map<String, dynamic>> progress) async {
+    if (progress.isEmpty) return;
+    // Add file_index if present using the snake_case key
+    final processed = progress.map((p) {
+      // Ideally the input map already has the correct keys
+      return p;
+    }).toList();
+
+    await _dio.post('/history/progress', data: processed);
+  }
 }
 
 @riverpod

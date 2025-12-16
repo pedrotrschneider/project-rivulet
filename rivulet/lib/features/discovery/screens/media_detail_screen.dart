@@ -4,6 +4,7 @@ import 'package:rivulet/features/discovery/discovery_provider.dart';
 
 import '../library_status_provider.dart';
 import '../widgets/stream_selection_sheet.dart';
+import '../domain/discovery_models.dart';
 
 class MediaDetailScreen extends ConsumerStatefulWidget {
   final String itemId;
@@ -22,10 +23,25 @@ class MediaDetailScreen extends ConsumerStatefulWidget {
 class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
   int? _selectedSeason;
 
+  String _formatDuration(int ticks) {
+    if (ticks <= 0) return '';
+    final duration = Duration(microseconds: ticks ~/ 10);
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    final seconds = duration.inSeconds.remainder(60);
+    if (hours > 0) {
+      return '$hours:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+    }
+    return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final detailAsync = ref.watch(
       mediaDetailProvider(id: widget.itemId, type: widget.type),
+    );
+    final historyAsync = ref.watch(
+      mediaHistoryProvider(externalId: widget.itemId, type: widget.type),
     );
 
     return Scaffold(
@@ -215,6 +231,118 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                       // Seasons Section
                       if (isShow) ...[
                         const SizedBox(height: 24),
+                        const SizedBox(height: 24),
+                        // Continue Watching Section (Series)
+                        if (historyAsync.hasValue &&
+                            historyAsync.value!.isNotEmpty) ...[
+                          Consumer(
+                            builder: (context, ref, child) {
+                              final seasonsAsync = ref.watch(
+                                showSeasonsProvider(widget.itemId),
+                              );
+                              final history = historyAsync.value!;
+                              final latest = history.first;
+
+                              return seasonsAsync.when(
+                                data: (seasons) {
+                                  int targetS = latest.seasonNumber ?? 1;
+                                  int targetE = latest.episodeNumber ?? 1;
+                                  bool isResuming =
+                                      !latest.isWatched &&
+                                      latest.positionTicks > 0;
+                                  String label = "Continue Watching";
+                                  bool shouldShow = true;
+
+                                  if (latest.isWatched) {
+                                    // Logic to find Next Up
+                                    label = "Next Up";
+
+                                    // STRICT: Only use stored next episode
+                                    if (latest.nextSeason != null &&
+                                        latest.nextEpisode != null) {
+                                      targetS = latest.nextSeason!;
+                                      targetE = latest.nextEpisode!;
+                                    } else {
+                                      // If no stored next episode, hide the card.
+                                      // This avoids "S2 E null" or incorrect guesses.
+                                      shouldShow = false;
+                                    }
+                                  }
+
+                                  if (!shouldShow)
+                                    return const SizedBox.shrink();
+
+                                  return Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        label,
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.titleLarge,
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Card(
+                                        clipBehavior: Clip.antiAlias,
+                                        child: ListTile(
+                                          leading: const Icon(
+                                            Icons.play_circle_outline,
+                                            size: 40,
+                                          ),
+                                          title: Text('S$targetS E$targetE'),
+                                          subtitle: isResuming
+                                              ? LinearProgressIndicator(
+                                                  value:
+                                                      latest.durationTicks > 0
+                                                      ? latest.positionTicks /
+                                                            latest.durationTicks
+                                                      : 0,
+                                                  backgroundColor:
+                                                      Colors.grey[800],
+                                                )
+                                              : const Text("Tap to play"),
+                                          onTap: () {
+                                            showModalBottomSheet(
+                                              context: context,
+                                              isScrollControlled: true,
+                                              builder: (context) => StreamSelectionSheet(
+                                                externalId:
+                                                    detail.imdbId ??
+                                                    widget.itemId,
+                                                title: 'S${targetS}E${targetE}',
+                                                type: 'show',
+                                                season: targetS,
+                                                episode: targetE,
+                                                // Only pass resume params if resuming EXACT episode
+                                                startPosition: isResuming
+                                                    ? latest.positionTicks
+                                                    : null,
+                                                resumeMagnet: isResuming
+                                                    ? latest.lastMagnet
+                                                    : null,
+                                                resumeFileIndex: isResuming
+                                                    ? latest.lastFileIndex
+                                                    : null,
+                                                // STRICT: Use stored values or null if not available for resume
+                                                nextSeason: latest.nextSeason,
+                                                nextEpisode: latest.nextEpisode,
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(height: 24),
+                                    ],
+                                  );
+                                },
+                                error: (_, __) => const SizedBox.shrink(),
+                                loading: () =>
+                                    const SizedBox.shrink(), // Don't show card while loading seasons info
+                              );
+                            },
+                          ),
+                        ],
                         Text(
                           'Seasons',
                           style: Theme.of(context).textTheme.titleLarge,
@@ -368,27 +496,108 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                                     }
                                     return ListTile(
                                       contentPadding: EdgeInsets.zero,
-                                      leading: ClipRRect(
-                                        borderRadius: BorderRadius.circular(4),
-                                        child: Container(
-                                          width: 100,
-                                          height: 56,
-                                          color: Colors.grey[800],
-                                          child: stillUrl != null
-                                              ? Image.network(
-                                                  stillUrl,
-                                                  fit: BoxFit.cover,
-                                                )
-                                              : const Icon(Icons.image),
-                                        ),
+                                      leading: Stack(
+                                        children: [
+                                          ClipRRect(
+                                            borderRadius: BorderRadius.circular(
+                                              4,
+                                            ),
+                                            child: Container(
+                                              width: 100,
+                                              height: 56,
+                                              color: Colors.grey[800],
+                                              child: stillUrl != null
+                                                  ? Image.network(
+                                                      stillUrl,
+                                                      fit: BoxFit.cover,
+                                                    )
+                                                  : const Icon(Icons.image),
+                                            ),
+                                          ),
+                                          // Checkmark overlay
+                                          if (historyAsync.hasValue) ...[
+                                            Builder(
+                                              builder: (context) {
+                                                final h = historyAsync.value!
+                                                    .firstWhere(
+                                                      (h) =>
+                                                          h.seasonNumber ==
+                                                              _selectedSeason &&
+                                                          h.episodeNumber ==
+                                                              episode
+                                                                  .episodeNumber,
+                                                      orElse: () =>
+                                                          HistoryItem.empty(),
+                                                    );
+                                                if (h.mediaId.isNotEmpty &&
+                                                    h.isWatched) {
+                                                  return Positioned.fill(
+                                                    child: Container(
+                                                      color: Colors.black54,
+                                                      child: const Center(
+                                                        child: Icon(
+                                                          Icons.check,
+                                                          color: Colors.green,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  );
+                                                }
+                                                return const SizedBox.shrink();
+                                              },
+                                            ),
+                                          ],
+                                        ],
                                       ),
                                       title: Text(
                                         '${episode.episodeNumber}. ${episode.name}',
                                       ),
-                                      subtitle: Text(
-                                        episode.overview ?? '',
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
+                                      subtitle: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            episode.overview ?? '',
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          if (historyAsync.hasValue)
+                                            Builder(
+                                              builder: (context) {
+                                                final h = historyAsync.value!
+                                                    .firstWhere(
+                                                      (h) =>
+                                                          h.seasonNumber ==
+                                                              _selectedSeason &&
+                                                          h.episodeNumber ==
+                                                              episode
+                                                                  .episodeNumber,
+                                                      orElse: () =>
+                                                          HistoryItem.empty(),
+                                                    );
+                                                if (h.mediaId.isNotEmpty &&
+                                                    !h.isWatched &&
+                                                    h.positionTicks > 0) {
+                                                  return Padding(
+                                                    padding:
+                                                        const EdgeInsets.only(
+                                                          top: 4.0,
+                                                        ),
+                                                    child: LinearProgressIndicator(
+                                                      value: h.durationTicks > 0
+                                                          ? h.positionTicks /
+                                                                h.durationTicks
+                                                          : 0,
+                                                      backgroundColor:
+                                                          Colors.grey[800],
+                                                      minHeight: 2,
+                                                    ),
+                                                  );
+                                                }
+                                                return const SizedBox.shrink();
+                                              },
+                                            ),
+                                        ],
                                       ),
                                       onTap: () {
                                         // Open Stream Selection for Episode
@@ -405,6 +614,62 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                                             type: 'show',
                                             season: _selectedSeason,
                                             episode: episode.episodeNumber,
+                                            nextSeason: (() {
+                                              if (index + 1 < episodes.length)
+                                                return _selectedSeason;
+                                              // Check for next season
+                                              final seasons = ref
+                                                  .read(
+                                                    showSeasonsProvider(
+                                                      widget.itemId,
+                                                    ),
+                                                  )
+                                                  .asData
+                                                  ?.value;
+                                              if (seasons != null) {
+                                                final currentIdx = seasons
+                                                    .indexWhere(
+                                                      (s) =>
+                                                          s.seasonNumber ==
+                                                          _selectedSeason,
+                                                    );
+                                                if (currentIdx != -1 &&
+                                                    currentIdx + 1 <
+                                                        seasons.length) {
+                                                  return seasons[currentIdx + 1]
+                                                      .seasonNumber;
+                                                }
+                                              }
+                                              return null;
+                                            })(),
+                                            nextEpisode: (() {
+                                              if (index + 1 < episodes.length)
+                                                return episodes[index + 1]
+                                                    .episodeNumber;
+                                              // Check for next season
+                                              final seasons = ref
+                                                  .read(
+                                                    showSeasonsProvider(
+                                                      widget.itemId,
+                                                    ),
+                                                  )
+                                                  .asData
+                                                  ?.value;
+                                              if (seasons != null) {
+                                                final currentIdx = seasons
+                                                    .indexWhere(
+                                                      (s) =>
+                                                          s.seasonNumber ==
+                                                          _selectedSeason,
+                                                    );
+                                                if (currentIdx != -1 &&
+                                                    currentIdx + 1 <
+                                                        seasons.length) {
+                                                  return 1;
+                                                }
+                                              }
+                                              return null;
+                                            })(),
                                           ),
                                         );
                                       },
@@ -435,6 +700,20 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
           ? FloatingActionButton.extended(
               onPressed: () {
                 final detail = detailAsync.asData!.value;
+
+                int? startPos;
+                String? resMagnet;
+                int? resFileIdx;
+
+                if (historyAsync.hasValue && historyAsync.value!.isNotEmpty) {
+                  final h = historyAsync.value!.first;
+                  if (!h.isWatched && h.positionTicks > 0) {
+                    startPos = h.positionTicks;
+                    resMagnet = h.lastMagnet;
+                    resFileIdx = h.lastFileIndex;
+                  }
+                }
+
                 showModalBottomSheet(
                   context: context,
                   isScrollControlled: true,
@@ -444,11 +723,21 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                         detail.id, // Prefer IMDB ID if available
                     title: detail.title,
                     type: 'movie',
+                    startPosition: startPos,
+                    resumeMagnet: resMagnet,
+                    resumeFileIndex: resFileIdx,
                   ),
                 );
               },
               icon: const Icon(Icons.play_arrow),
-              label: const Text('Play'),
+              label: Text(
+                (historyAsync.hasValue &&
+                        historyAsync.value!.isNotEmpty &&
+                        !historyAsync.value!.first.isWatched &&
+                        historyAsync.value!.first.positionTicks > 0)
+                    ? 'Continue from ${_formatDuration(historyAsync.value!.first.positionTicks)}'
+                    : 'Play',
+              ),
             )
           : null,
     );

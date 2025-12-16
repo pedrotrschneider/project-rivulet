@@ -10,6 +10,11 @@ class StreamSelectionSheet extends ConsumerStatefulWidget {
   final String type;
   final int? season;
   final int? episode;
+  final int? startPosition;
+  final String? resumeMagnet;
+  final int? resumeFileIndex;
+  final int? nextSeason;
+  final int? nextEpisode;
 
   const StreamSelectionSheet({
     super.key,
@@ -18,6 +23,11 @@ class StreamSelectionSheet extends ConsumerStatefulWidget {
     required this.type,
     this.season,
     this.episode,
+    this.startPosition,
+    this.resumeMagnet,
+    this.resumeFileIndex,
+    this.nextSeason,
+    this.nextEpisode,
   });
 
   @override
@@ -36,50 +46,26 @@ class _StreamSelectionSheetState extends ConsumerState<StreamSelectionSheet> {
   }
 
   void _checkFavorites(List<dynamic> streams) async {
+    // ... existing ...
     if (_favoritesLoaded || streams.isEmpty) return;
-
-    // Extract hash from magnet link (cached or parse?)
-    // StreamResult likely has magnet. Extract InfoHash?
-    // Backend expects 'Hash'.
-    // Assuming backend AddFavorite uses the same hash string as we send here.
-    // We should parse magnet to get hash? Or just send magnet?
-    // User request: "hash of the torrent stream".
-    // Magnets usually contain xt=urn:btih:<HASH>.
-    // Let's assume we extract it. Or simpler, store the whole magnet if needed, but hash is better.
-    // For now, let's use the full magnet link string or a simple hash extractor if available.
-    // But StreamResult struct in existing code? Let's check previously viewed code.
-    // Step 507 view: `stream.magnet` is String.
-    // Let's use a helper to extract hash or just use magnet string as ID if unique.
-    // Better to use hash.
-
-    // Quick hash extraction regex failure fallback to full string?
-    // Let's implement a simple extractor or assume repo handles it.
-    // For now, I will use "magnet" string as "hash" key for simplicity unless I see a helper.
-    // Actually, `checkFavoriteStreams` in repo takes `List<String> hashes`.
-
     try {
       final realHashes = streams.map((s) => _extractHash(s.magnet)).toList();
       final favorites = await ref
           .read(discoveryRepositoryProvider)
           .checkFavoriteStreams(widget.externalId, realHashes);
-
       if (mounted) {
         setState(() {
           _favoriteHashes = favorites.toSet();
           _favoritesLoaded = true;
         });
       }
-    } catch (_) {
-      // Silent fail
-    }
+    } catch (_) {}
   }
 
+  // ... existing ExtractHash, ToggleFavorite ...
   String _extractHash(String magnet) {
     final uri = Uri.tryParse(magnet);
     if (uri == null) return magnet;
-
-    // specific to magnet:?xt=urn:btih:HASH
-    // simple regex
     final regExp = RegExp(r'xt=urn:btih:([a-zA-Z0-9]+)');
     final match = regExp.firstMatch(magnet);
     if (match != null) return match.group(1) ?? magnet;
@@ -87,18 +73,15 @@ class _StreamSelectionSheetState extends ConsumerState<StreamSelectionSheet> {
   }
 
   Future<void> _toggleFavorite(String magnet) async {
+    // ... logic ...
     final hash = _extractHash(magnet);
     final isFav = _favoriteHashes.contains(hash);
-
-    // Optimistic update
     setState(() {
-      if (isFav) {
+      if (isFav)
         _favoriteHashes.remove(hash);
-      } else {
+      else
         _favoriteHashes.add(hash);
-      }
     });
-
     try {
       if (isFav) {
         await ref
@@ -110,18 +93,13 @@ class _StreamSelectionSheetState extends ConsumerState<StreamSelectionSheet> {
             .addFavoriteStream(widget.externalId, hash);
       }
     } catch (e) {
-      // Revert on error
-      if (mounted) {
+      if (mounted)
         setState(() {
           if (isFav)
             _favoriteHashes.add(hash);
           else
             _favoriteHashes.remove(hash);
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to update favorite: $e')),
-        );
-      }
     }
   }
 
@@ -131,23 +109,66 @@ class _StreamSelectionSheetState extends ConsumerState<StreamSelectionSheet> {
     });
 
     try {
+      // Logic: If selected magnet matches resume magnet, try to use resume file index?
+      // But only if current fileIndex is absent or we want to override?
+      // Actually, scraper 'fileIndex' is what we trust for THAT stream.
+      // Resume 'fileIndex' is for the *previous* session.
+      // If we pick a NEW stream, we use ITS index (or default).
+      // If we pick the SAME stream (hash match), we *might* want to force index.
+      // But scraper usually separates files into separate streams if multifile?
+      // Or scraper returns one entry per torrent.
+      // If Torrentio returns "S02 Packs", we get one entry.
+      // If we resume, we want `fileIndex` to resolve correctly.
+      // If the user clicks the *same* magnet entry, we should presumably respect the resume index if available.
+      // How do we know it's the same? Compare magnets.
+
+      int? targetIndex = fileIndex;
+      if (widget.resumeMagnet != null && widget.resumeFileIndex != null) {
+        if (_extractHash(magnet) == _extractHash(widget.resumeMagnet!)) {
+          // Prefer resume index if picking same magnet
+          targetIndex = widget.resumeFileIndex;
+        }
+      }
+
       final repo = ref.read(discoveryRepositoryProvider);
       final result = await repo.resolveStream(
         magnet: magnet,
         season: widget.season,
         episode: widget.episode,
-        fileIndex: fileIndex,
+        fileIndex: targetIndex,
       );
 
       if (!mounted) return;
 
       final url = result['url'] as String?;
+      final resultFileIndex = result['file_index'] as int?;
+
       if (url != null) {
-        // Close sheet and open player
+        // If we are resuming (magnet matches & position > 0), pass startPosition
+        int startPos = 0;
+        if (widget.startPosition != null && widget.startPosition! > 0) {
+          // Only if same magnet? User said "when you select a source from the list, it should return to the correct time".
+          // This implies ANY source.
+          startPos = widget.startPosition!;
+        }
+
         Navigator.pop(context); // Close sheet
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => PlayerScreen(url: url)),
+          MaterialPageRoute(
+            builder: (context) => PlayerScreen(
+              url: url,
+              externalId: widget.externalId,
+              type: widget.type,
+              season: widget.season,
+              episode: widget.episode,
+              magnet: magnet,
+              fileIndex: resultFileIndex,
+              startPosition: startPos,
+              nextSeason: widget.nextSeason,
+              nextEpisode: widget.nextEpisode,
+            ),
+          ),
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(

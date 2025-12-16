@@ -394,3 +394,93 @@ final class StreamScraperFamily extends $Family
   @override
   String toString() => r'streamScraperProvider';
 }
+
+@ProviderFor(mediaHistory)
+const mediaHistoryProvider = MediaHistoryFamily._();
+
+final class MediaHistoryProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<List<HistoryItem>>,
+          List<HistoryItem>,
+          FutureOr<List<HistoryItem>>
+        >
+    with
+        $FutureModifier<List<HistoryItem>>,
+        $FutureProvider<List<HistoryItem>> {
+  const MediaHistoryProvider._({
+    required MediaHistoryFamily super.from,
+    required ({String externalId, String type}) super.argument,
+  }) : super(
+         retry: null,
+         name: r'mediaHistoryProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$mediaHistoryHash();
+
+  @override
+  String toString() {
+    return r'mediaHistoryProvider'
+        ''
+        '$argument';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<List<HistoryItem>> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<List<HistoryItem>> create(Ref ref) {
+    final argument = this.argument as ({String externalId, String type});
+    return mediaHistory(
+      ref,
+      externalId: argument.externalId,
+      type: argument.type,
+    );
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is MediaHistoryProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$mediaHistoryHash() => r'47345b3019724883e89d1bf06dd420bb5aef6388';
+
+final class MediaHistoryFamily extends $Family
+    with
+        $FunctionalFamilyOverride<
+          FutureOr<List<HistoryItem>>,
+          ({String externalId, String type})
+        > {
+  const MediaHistoryFamily._()
+    : super(
+        retry: null,
+        name: r'mediaHistoryProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  MediaHistoryProvider call({
+    required String externalId,
+    required String type,
+  }) => MediaHistoryProvider._(
+    argument: (externalId: externalId, type: type),
+    from: this,
+  );
+
+  @override
+  String toString() => r'mediaHistoryProvider';
+}
