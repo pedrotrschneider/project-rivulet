@@ -5,7 +5,8 @@ import 'package:rivulet/features/discovery/repository/discovery_repository.dart'
 import 'package:rivulet/features/discovery/domain/discovery_models.dart';
 import 'package:rivulet/features/auth/auth_provider.dart';
 import 'package:rivulet/features/discovery/screens/media_detail_screen.dart';
-import 'package:rivulet/features/player/player_screen.dart';
+
+import '../discovery/widgets/stream_selection_sheet.dart';
 
 class DiscoveryScreen extends ConsumerStatefulWidget {
   const DiscoveryScreen({super.key});
@@ -269,71 +270,27 @@ class _HistoryCard extends ConsumerWidget {
 
   const _HistoryCard({required this.item});
 
-  Future<void> _resumePlayback(BuildContext context, WidgetRef ref) async {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Resuming playback...'),
-        duration: Duration(seconds: 1),
+  void _openStreamSelection(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StreamSelectionSheet(
+        externalId: item.mediaId,
+        title:
+            item.seriesName ?? ((item.type == 'movie') ? 'Movie' : 'Episode'),
+        type: item.type == 'episode' ? 'show' : 'movie',
+        season: item.nextSeason ?? item.seasonNumber,
+        episode: item.nextEpisode ?? item.episodeNumber,
+        startPosition: item.positionTicks,
+        nextSeason: item.nextSeason,
+        nextEpisode: item.nextEpisode,
       ),
-    );
-
-    try {
-      final repo = ref.read(discoveryRepositoryProvider);
-      final result = await repo.resolveStream(
-        magnet: item.lastMagnet,
-        season: item.seasonNumber,
-        episode: item.episodeNumber,
-        fileIndex: item.lastFileIndex,
-      );
-
-      if (!context.mounted) return;
-
-      final url = result['url'] as String?;
-      final resultFileIndex = result['file_index'] as int?;
-
-      if (url != null && url.isNotEmpty) {
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => PlayerScreen(
-              url: url,
-              externalId: item.mediaId,
-              type: item.type == 'episode' ? 'tv' : 'movie',
-              season: item.seasonNumber,
-              episode: item.episodeNumber,
-              magnet: item.lastMagnet,
-              startPosition: item.positionTicks,
-              fileIndex: resultFileIndex ?? item.lastFileIndex,
-            ),
-          ),
-        );
-        // Refresh history after playback
-        if (context.mounted) {
-          ref.invalidate(historyProvider);
-        }
-      } else {
-        throw Exception("Could not resolve stream URL");
-      }
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to resume: $e')));
-
-      // Fallback to details
+    ).then((_) {
       if (context.mounted) {
-        await Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => MediaDetailScreen(
-              itemId: item.mediaId,
-              type: item.type == 'episode' ? 'tv' : 'movie',
-            ),
-          ),
-        );
-        if (context.mounted) {
-          ref.invalidate(historyProvider);
-        }
+        ref.invalidate(historyProvider);
       }
-    }
+    });
   }
 
   @override
@@ -367,23 +324,9 @@ class _HistoryCard extends ConsumerWidget {
     return SizedBox(
       width: 280,
       child: InkWell(
-        onTap: () async {
-          if (item.lastMagnet.isNotEmpty) {
-            await _resumePlayback(context, ref);
-          } else {
-            await Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (context) => MediaDetailScreen(
-                  itemId: item.mediaId,
-                  type: item.type == 'episode' ? 'tv' : 'movie',
-                ),
-              ),
-            );
-            // Refresh history after potential playback from details
-            if (context.mounted) {
-              ref.invalidate(historyProvider);
-            }
-          }
+        onTap: () {
+          // Always try to open stream selection for "continue watching" items
+          _openStreamSelection(context, ref);
         },
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -436,21 +379,23 @@ class _HistoryCard extends ConsumerWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              item.seriesName != null
-                  ? '${item.seriesName}'
-                  : item.title,
+              item.seriesName != null ? '${item.seriesName}' : item.title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             if (item.seasonNumber != null)
               Text(
-                item.isWatched ? 'S${item.nextSeason} E${item.nextEpisode}' : 'S${item.seasonNumber} E${item.episodeNumber}',
+                item.isWatched
+                    ? 'S${item.nextSeason} E${item.nextEpisode}'
+                    : 'S${item.seasonNumber} E${item.episodeNumber}',
                 style: const TextStyle(fontSize: 12, color: Colors.grey),
               ),
-            if (!item.isWatched && item.seasonNumber != null)
+            if (item.seasonNumber != null)
               Text(
-                item.title,
+                item.isWatched && item.nextEpisodeTitle != null
+                    ? item.nextEpisodeTitle!
+                    : item.title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 12, color: Colors.grey),

@@ -222,10 +222,25 @@ func ScrapeStreams(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, map[string]string{"error": "missing params"})
 	}
 
-	// Parse IMDB ID (Strip "imdb:" prefix if present)
+	// Parse ID
 	imdbID := externalID
+	isImdb := false
 	if len(externalID) > 5 && externalID[:5] == "imdb:" {
 		imdbID = externalID[5:]
+		isImdb = true
+	} else if len(externalID) > 2 && externalID[:2] == "tt" {
+		isImdb = true
+	}
+
+	// If NOT a clear IMDB ID, try to resolve via MDBList
+	if !isImdb && keys.MDBList != "" {
+		details, err := MdbClient.GetDetails(keys.MDBList, externalID, mediaType)
+		if err == nil && details.ImdbID != "" {
+			imdbID = details.ImdbID
+		} else {
+			// Log fallback or error?
+			// fmt.Println("Failed to resolve ID:", externalID, err)
+		}
 	}
 
 	// Parse Season/Episode

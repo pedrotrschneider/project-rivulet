@@ -247,6 +247,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                                 data: (seasons) {
                                   int targetS = latest.seasonNumber ?? 1;
                                   int targetE = latest.episodeNumber ?? 1;
+                                  String targetTitle = latest.title;
                                   bool isResuming =
                                       !latest.isWatched &&
                                       latest.positionTicks > 0;
@@ -257,11 +258,12 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                                     // Logic to find Next Up
                                     label = "Next Up";
 
-                                    // STRICT: Only use stored next episode
                                     if (latest.nextSeason != null &&
                                         latest.nextEpisode != null) {
                                       targetS = latest.nextSeason!;
                                       targetE = latest.nextEpisode!;
+                                      targetTitle =
+                                          latest.nextEpisodeTitle ?? '';
                                     } else {
                                       // If no stored next episode, hide the card.
                                       // This avoids "S2 E null" or incorrect guesses.
@@ -290,7 +292,9 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                                             Icons.play_circle_outline,
                                             size: 40,
                                           ),
-                                          title: Text('S$targetS E$targetE'),
+                                          title: Text(
+                                            'S$targetS E$targetE${targetTitle.isNotEmpty ? ' - $targetTitle' : ''}',
+                                          ),
                                           subtitle: isResuming
                                               ? LinearProgressIndicator(
                                                   value:
@@ -317,12 +321,6 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                                                 // Only pass resume params if resuming EXACT episode
                                                 startPosition: isResuming
                                                     ? latest.positionTicks
-                                                    : null,
-                                                resumeMagnet: isResuming
-                                                    ? latest.lastMagnet
-                                                    : null,
-                                                resumeFileIndex: isResuming
-                                                    ? latest.lastFileIndex
                                                     : null,
                                                 // STRICT: Use stored values or null if not available for resume
                                                 nextSeason: latest.nextSeason,
@@ -702,15 +700,16 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                 final detail = detailAsync.asData!.value;
 
                 int? startPos;
-                String? resMagnet;
-                int? resFileIdx;
+
+                // String? resMagnet;
+                // int? resFileIdx;
 
                 if (historyAsync.hasValue && historyAsync.value!.isNotEmpty) {
                   final h = historyAsync.value!.first;
                   if (!h.isWatched && h.positionTicks > 0) {
                     startPos = h.positionTicks;
-                    resMagnet = h.lastMagnet;
-                    resFileIdx = h.lastFileIndex;
+                    // resMagnet = h.lastMagnet;
+                    // resFileIdx = h.lastFileIndex;
                   }
                 }
 
@@ -724,8 +723,6 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                     title: detail.title,
                     type: 'movie',
                     startPosition: startPos,
-                    resumeMagnet: resMagnet,
-                    resumeFileIndex: resFileIdx,
                   ),
                 );
               },

@@ -11,8 +11,6 @@ class StreamSelectionSheet extends ConsumerStatefulWidget {
   final int? season;
   final int? episode;
   final int? startPosition;
-  final String? resumeMagnet;
-  final int? resumeFileIndex;
   final int? nextSeason;
   final int? nextEpisode;
 
@@ -24,8 +22,6 @@ class StreamSelectionSheet extends ConsumerStatefulWidget {
     this.season,
     this.episode,
     this.startPosition,
-    this.resumeMagnet,
-    this.resumeFileIndex,
     this.nextSeason,
     this.nextEpisode,
   });
@@ -122,33 +118,22 @@ class _StreamSelectionSheetState extends ConsumerState<StreamSelectionSheet> {
       // If the user clicks the *same* magnet entry, we should presumably respect the resume index if available.
       // How do we know it's the same? Compare magnets.
 
-      int? targetIndex = fileIndex;
-      if (widget.resumeMagnet != null && widget.resumeFileIndex != null) {
-        if (_extractHash(magnet) == _extractHash(widget.resumeMagnet!)) {
-          // Prefer resume index if picking same magnet
-          targetIndex = widget.resumeFileIndex;
-        }
-      }
-
       final repo = ref.read(discoveryRepositoryProvider);
       final result = await repo.resolveStream(
         magnet: magnet,
+        durationTicks: 0, // Placeholder, actual duration handled by player
         season: widget.season,
         episode: widget.episode,
-        fileIndex: targetIndex,
+        fileIndex: fileIndex,
       );
 
       if (!mounted) return;
 
       final url = result['url'] as String?;
-      final resultFileIndex = result['file_index'] as int?;
 
       if (url != null) {
-        // If we are resuming (magnet matches & position > 0), pass startPosition
         int startPos = 0;
         if (widget.startPosition != null && widget.startPosition! > 0) {
-          // Only if same magnet? User said "when you select a source from the list, it should return to the correct time".
-          // This implies ANY source.
           startPos = widget.startPosition!;
         }
 
@@ -162,8 +147,6 @@ class _StreamSelectionSheetState extends ConsumerState<StreamSelectionSheet> {
               type: widget.type,
               season: widget.season,
               episode: widget.episode,
-              magnet: magnet,
-              fileIndex: resultFileIndex,
               startPosition: startPos,
               nextSeason: widget.nextSeason,
               nextEpisode: widget.nextEpisode,
@@ -218,7 +201,16 @@ class _StreamSelectionSheetState extends ConsumerState<StreamSelectionSheet> {
       },
     );
 
+    // Check immediately if data is already available (e.g. cached)
+    if (streamAsync.hasValue && !_favoritesLoaded) {
+      Future.microtask(() => _checkFavorites(streamAsync.value!));
+    }
+
     return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       height: MediaQuery.of(context).size.height * 0.7,
       padding: const EdgeInsets.all(16),
       child: Column(

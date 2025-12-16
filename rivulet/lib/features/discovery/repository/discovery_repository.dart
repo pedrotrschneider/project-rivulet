@@ -107,6 +107,7 @@ class DiscoveryRepository {
 
   Future<Map<String, dynamic>> resolveStream({
     required String magnet,
+    required int durationTicks,
     int? season,
     int? episode,
     int? fileIndex,
@@ -116,6 +117,7 @@ class DiscoveryRepository {
       '/stream/resolve',
       data: {
         'magnet': magnet,
+        'duration_ticks': durationTicks,
         if (season != null) 'season': season,
         if (episode != null) 'episode': episode,
         if (fileIndex != null) 'file_index': fileIndex,

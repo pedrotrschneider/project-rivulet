@@ -11,9 +11,7 @@ class PlayerScreen extends ConsumerStatefulWidget {
   final String? type;
   final int? season;
   final int? episode;
-  final String? magnet;
   final int startPosition; // Ticks (microseconds * 10)
-  final int? fileIndex;
   final int? nextSeason;
   final int? nextEpisode;
 
@@ -24,9 +22,7 @@ class PlayerScreen extends ConsumerStatefulWidget {
     this.type,
     this.season,
     this.episode,
-    this.magnet,
     this.startPosition = 0,
-    this.fileIndex,
     this.nextSeason,
     this.nextEpisode,
   });
@@ -137,8 +133,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       'duration_ticks': duration.inMicroseconds * 10,
       'is_watched': isWatched,
       'timestamp': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      'magnet': widget.magnet ?? '',
-      'file_index': widget.fileIndex,
       if (widget.nextSeason != null) 'next_season': widget.nextSeason,
       if (widget.nextEpisode != null) 'next_episode': widget.nextEpisode,
     };

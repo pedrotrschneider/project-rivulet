@@ -34,8 +34,6 @@ type MediaProgress struct {
 	DurationTicks int64
 	IsWatched     bool
 	LastPlayedAt  time.Time
-	LastMagnet    string `gorm:"type:text"`
-	LastFileIndex *int
-	NextSeason    *int
-	NextEpisode   *int
+
+	NextEpisodeID *uuid.UUID `gorm:"type:uuid"`
 }

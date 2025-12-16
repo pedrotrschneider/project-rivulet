@@ -38,14 +38,12 @@ func UpdateProgress(c echo.Context) error {
 		Season     int    `json:"season"`
 		Episode    int    `json:"episode"`
 
-		PositionTicks int64  `json:"position_ticks"`
-		DurationTicks int64  `json:"duration_ticks"`
-		IsWatched     bool   `json:"is_watched"`
-		Timestamp     int64  `json:"timestamp"`
-		Magnet        string `json:"magnet"`
-		FileIndex     *int   `json:"file_index"`
-		NextSeason    *int   `json:"next_season"`
-		NextEpisode   *int   `json:"next_episode"`
+		PositionTicks int64 `json:"position_ticks"`
+		DurationTicks int64 `json:"duration_ticks"`
+		IsWatched     bool  `json:"is_watched"`
+		Timestamp     int64 `json:"timestamp"`
+		NextSeason    *int  `json:"next_season"`
+		NextEpisode   *int  `json:"next_episode"`
 	}
 
 	var batch []ProgressRequest
@@ -133,17 +131,15 @@ func UpdateProgress(c echo.Context) error {
 				progress.DurationTicks = 0
 			}
 			progress.LastPlayedAt = clientTime
-			if item.Magnet != "" {
-				progress.LastMagnet = item.Magnet
-			}
-			if item.FileIndex != nil {
-				progress.LastFileIndex = item.FileIndex
-			}
-			if item.NextSeason != nil {
-				progress.NextSeason = item.NextSeason
-			}
-			if item.NextEpisode != nil {
-				progress.NextEpisode = item.NextEpisode
+
+			if item.NextSeason != nil && item.NextEpisode != nil {
+				// Resolve Next Episode ID
+				nextEpID, err := services.EnsureEpisode(TmdbClient, keys.TMDB, mediaID, *item.NextSeason, *item.NextEpisode)
+				if err == nil {
+					progress.NextEpisodeID = &nextEpID
+				} else {
+					fmt.Println("Error ensuring next episode:", err)
+				}
 			}
 
 			if err := tx.Clauses(clause.OnConflict{
@@ -229,16 +225,16 @@ func GetHistory(c echo.Context) error {
 		PositionTicks int64      `json:"position_ticks"`
 		DurationTicks int64      `json:"duration_ticks"`
 		LastPlayedAt  time.Time  `json:"last_played_at"`
-		LastMagnet    string     `json:"last_magnet"`
-		LastFileIndex *int       `json:"last_file_index"`
-		IsWatched     bool       `json:"is_watched"`
+
+		IsWatched bool `json:"is_watched"`
 
 		// Extra for frontend logic
-		SeriesName    string `json:"series_name,omitempty"`
-		SeasonNumber  int    `json:"season_number,omitempty"`
-		EpisodeNumber int    `json:"episode_number,omitempty"`
-		NextSeason    *int   `json:"next_season,omitempty"`
-		NextEpisode   *int   `json:"next_episode,omitempty"`
+		SeriesName       string  `json:"series_name,omitempty"`
+		SeasonNumber     int     `json:"season_number,omitempty"`
+		EpisodeNumber    int     `json:"episode_number,omitempty"`
+		NextSeason       *int    `json:"next_season,omitempty"`
+		NextEpisode      *int    `json:"next_episode,omitempty"`
+		NextEpisodeTitle *string `json:"next_episode_title,omitempty"`
 	}
 
 	var results []HistoryResult
@@ -249,11 +245,20 @@ func GetHistory(c echo.Context) error {
 		res.PositionTicks = p.PositionTicks
 		res.DurationTicks = p.DurationTicks
 		res.LastPlayedAt = p.LastPlayedAt
-		res.LastMagnet = p.LastMagnet
-		res.LastFileIndex = p.LastFileIndex
+
 		res.IsWatched = p.IsWatched
-		res.NextSeason = p.NextSeason
-		res.NextEpisode = p.NextEpisode
+
+		if p.NextEpisodeID != nil {
+			var nextEp models.Episode
+			if err := db.DB.First(&nextEp, p.NextEpisodeID).Error; err == nil {
+				res.NextEpisode = &nextEp.EpisodeNumber
+				res.NextEpisodeTitle = &nextEp.Title
+				var nextSeason models.Season
+				if err := db.DB.First(&nextSeason, nextEp.SeasonID).Error; err == nil {
+					res.NextSeason = &nextSeason.SeasonNumber
+				}
+			}
+		}
 
 		// Check Library Status
 		var inLibrary bool
@@ -273,10 +278,10 @@ func GetHistory(c echo.Context) error {
 			if err := db.DB.First(&series, p.MediaID).Error; err == nil {
 				res.SeriesName = series.Title
 
-				// Resolve External ID (prefer TMDB for ease, or IMDb)
-				if val, ok := series.ExternalIDs["tmdb"]; ok {
+				// Resolve External ID (prefer correct IMDB ID for consistency)
+				if val, ok := series.ExternalIDs["imdb"]; ok {
 					res.MediaID = fmt.Sprintf("%v", val)
-				} else if val, ok := series.ExternalIDs["imdb"]; ok {
+				} else if val, ok := series.ExternalIDs["tmdb"]; ok {
 					res.MediaID = fmt.Sprintf("%v", val)
 				} else {
 					res.MediaID = series.ID.String() // Fallback
@@ -287,7 +292,7 @@ func GetHistory(c echo.Context) error {
 					res.BackdropPath = getImagePath(series.ID, "Series", "backdrop")
 				} else {
 					// Fetch Remote
-					// We need TMDB ID
+					// We need TMDB ID for image fetching
 					if tmdbID, ok := getTmdbID(series.ExternalIDs); ok && keys.TMDB != "" {
 						show, err := TmdbClient.GetTVShowDetails(keys.TMDB, tmdbID)
 						if err == nil {
@@ -318,10 +323,10 @@ func GetHistory(c echo.Context) error {
 			if err := db.DB.First(&movie, p.MediaID).Error; err == nil {
 				res.Title = movie.Title
 
-				// External ID
-				if val, ok := movie.ExternalIDs["tmdb"]; ok {
+				// External ID (prefer IMDB)
+				if val, ok := movie.ExternalIDs["imdb"]; ok {
 					res.MediaID = fmt.Sprintf("%v", val)
-				} else if val, ok := movie.ExternalIDs["imdb"]; ok {
+				} else if val, ok := movie.ExternalIDs["tmdb"]; ok {
 					res.MediaID = fmt.Sprintf("%v", val)
 				} else {
 					res.MediaID = movie.ID.String()
@@ -331,7 +336,7 @@ func GetHistory(c echo.Context) error {
 					res.PosterPath = getImagePath(movie.ID, "Movie", "poster")
 					res.BackdropPath = getImagePath(movie.ID, "Movie", "backdrop")
 				} else {
-					// Fetch Remote
+					// Fetch Remote logic remains same (uses TMDB ID for image)
 					if tmdbID, ok := getTmdbID(movie.ExternalIDs); ok && keys.TMDB != "" {
 						// MDBList preference
 						foundMdb := false
@@ -430,13 +435,13 @@ func GetMediaHistory(c echo.Context) error {
 	if mediaType == "movie" {
 		var movie models.Movie
 		// Postgres JSONB query
-		if err := db.DB.Where("profile_id = ? AND external_ids ->> 'tmdb' = ?", profile.ID, externalID).First(&movie).Error; err == nil {
+		if err := db.DB.Where("profile_id = ? AND (external_ids ->> 'imdb' = ? OR external_ids ->> 'tmdb' = ?)", profile.ID, externalID, externalID).First(&movie).Error; err == nil {
 			mediaID = movie.ID
 			found = true
 		}
 	} else {
 		var series models.Series
-		if err := db.DB.Where("profile_id = ? AND external_ids ->> 'tmdb' = ?", profile.ID, externalID).First(&series).Error; err == nil {
+		if err := db.DB.Where("profile_id = ? AND (external_ids ->> 'imdb' = ? OR external_ids ->> 'tmdb' = ?)", profile.ID, externalID, externalID).First(&series).Error; err == nil {
 			mediaID = series.ID
 			found = true
 		}
@@ -458,41 +463,79 @@ func GetMediaHistory(c echo.Context) error {
 	// We mainly need EpisodeID, Season/Episode numbers, Watched status, Position.
 
 	type SimpleHistory struct {
-		MediaID       string     `json:"media_id"`
-		EpisodeID     *uuid.UUID `json:"episode_id,omitempty"`
-		SeasonNumber  int        `json:"season_number,omitempty"`
-		EpisodeNumber int        `json:"episode_number,omitempty"`
-		PositionTicks int64      `json:"position_ticks"`
-		DurationTicks int64      `json:"duration_ticks"`
-		IsWatched     bool       `json:"is_watched"`
-		LastPlayedAt  time.Time  `json:"last_played_at"`
-		LastMagnet    string     `json:"last_magnet"`
-		LastFileIndex *int       `json:"last_file_index"`
-		NextSeason    *int       `json:"next_season"`
-		NextEpisode   *int       `json:"next_episode"`
+		MediaID          string     `json:"media_id"`
+		EpisodeID        *uuid.UUID `json:"episode_id,omitempty"`
+		Title            *string    `json:"title,omitempty"`
+		SeasonNumber     int        `json:"season_number,omitempty"`
+		EpisodeNumber    int        `json:"episode_number,omitempty"`
+		PositionTicks    int64      `json:"position_ticks"`
+		DurationTicks    int64      `json:"duration_ticks"`
+		IsWatched        bool       `json:"is_watched"`
+		LastPlayedAt     time.Time  `json:"last_played_at"`
+		LastMagnet       string     `json:"last_magnet"`
+		LastFileIndex    *int       `json:"last_file_index"`
+		NextSeason       *int       `json:"next_season"`
+		NextEpisode      *int       `json:"next_episode"`
+		NextEpisodeTitle *string    `json:"next_episode_title"`
 	}
 
 	var results []SimpleHistory
 	for _, p := range progress {
 		var s SimpleHistory
-		if p.MediaID != nil {
-			s.MediaID = p.MediaID.String()
+
+		// Load Media to get External ID
+		if p.EpisodeID != nil {
+			// Series
+			var series models.Series
+			if err := db.DB.First(&series, p.MediaID).Error; err == nil {
+				if val, ok := series.ExternalIDs["imdb"]; ok {
+					s.MediaID = fmt.Sprintf("%v", val)
+				} else if val, ok := series.ExternalIDs["tmdb"]; ok {
+					s.MediaID = fmt.Sprintf("%v", val)
+				} else {
+					s.MediaID = series.ID.String()
+				}
+			}
+		} else {
+			// Movie
+			var movie models.Movie
+			if err := db.DB.First(&movie, p.MediaID).Error; err == nil {
+				if val, ok := movie.ExternalIDs["imdb"]; ok {
+					s.MediaID = fmt.Sprintf("%v", val)
+				} else if val, ok := movie.ExternalIDs["tmdb"]; ok {
+					s.MediaID = fmt.Sprintf("%v", val)
+				} else {
+					s.MediaID = movie.ID.String()
+				}
+			}
+		}
+
+		if s.MediaID == "" && p.MediaID != nil {
+			s.MediaID = p.MediaID.String() // Fallback
 		}
 		s.EpisodeID = p.EpisodeID
 		s.PositionTicks = p.PositionTicks
 		s.DurationTicks = p.DurationTicks
 		s.IsWatched = p.IsWatched
 		s.LastPlayedAt = p.LastPlayedAt
-		s.LastMagnet = p.LastMagnet
-		s.LastMagnet = p.LastMagnet
-		s.LastFileIndex = p.LastFileIndex
-		s.NextSeason = p.NextSeason
-		s.NextEpisode = p.NextEpisode
+
+		if p.NextEpisodeID != nil {
+			var nextEp models.Episode
+			if err := db.DB.First(&nextEp, p.NextEpisodeID).Error; err == nil {
+				s.NextEpisode = &nextEp.EpisodeNumber
+				s.NextEpisodeTitle = &nextEp.Title
+				var nextSeason models.Season
+				if err := db.DB.First(&nextSeason, nextEp.SeasonID).Error; err == nil {
+					s.NextSeason = &nextSeason.SeasonNumber
+				}
+			}
+		}
 
 		if p.EpisodeID != nil {
 			var ep models.Episode
-			if err := db.DB.Select("season_id, episode_number").First(&ep, p.EpisodeID).Error; err == nil {
+			if err := db.DB.Select("season_id, episode_number, title").First(&ep, p.EpisodeID).Error; err == nil {
 				s.EpisodeNumber = ep.EpisodeNumber
+				s.Title = &ep.Title
 				var sea models.Season
 				if err := db.DB.Select("season_number").First(&sea, ep.SeasonID).Error; err == nil {
 					s.SeasonNumber = sea.SeasonNumber

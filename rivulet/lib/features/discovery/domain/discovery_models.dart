@@ -284,14 +284,13 @@ class HistoryItem {
   final int positionTicks;
   final int durationTicks;
   final String lastPlayedAt;
-  final String lastMagnet;
   final String? seriesName;
   final bool isWatched;
   final int? seasonNumber;
   final int? episodeNumber;
-  final int? lastFileIndex;
   final int? nextSeason;
   final int? nextEpisode;
+  final String? nextEpisodeTitle;
 
   HistoryItem({
     required this.mediaId,
@@ -303,14 +302,13 @@ class HistoryItem {
     required this.positionTicks,
     required this.durationTicks,
     required this.lastPlayedAt,
-    required this.lastMagnet,
     this.seriesName,
-    this.isWatched = false,
+    required this.isWatched,
     this.seasonNumber,
     this.episodeNumber,
-    this.lastFileIndex,
     this.nextSeason,
     this.nextEpisode,
+    this.nextEpisodeTitle,
   });
 
   factory HistoryItem.fromJson(Map<String, dynamic> json) {
@@ -324,14 +322,13 @@ class HistoryItem {
       positionTicks: (json['position_ticks'] as num?)?.toInt() ?? 0,
       durationTicks: (json['duration_ticks'] as num?)?.toInt() ?? 0,
       lastPlayedAt: json['last_played_at']?.toString() ?? '',
-      lastMagnet: json['last_magnet']?.toString() ?? '',
       seriesName: json['series_name']?.toString(),
       isWatched: json['is_watched'] as bool? ?? false,
       seasonNumber: (json['season_number'] as num?)?.toInt(),
       episodeNumber: (json['episode_number'] as num?)?.toInt(),
-      lastFileIndex: (json['last_file_index'] as num?)?.toInt(),
       nextSeason: (json['next_season'] as num?)?.toInt(),
       nextEpisode: (json['next_episode'] as num?)?.toInt(),
+      nextEpisodeTitle: json['next_episode_title']?.toString(),
     );
   }
 
@@ -345,7 +342,7 @@ class HistoryItem {
       positionTicks: 0,
       durationTicks: 0,
       lastPlayedAt: '',
-      lastMagnet: '',
+      isWatched: false,
     );
   }
 }
