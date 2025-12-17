@@ -174,6 +174,16 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
 
           final isShow = detail.type == 'tv' || detail.type == 'show';
 
+          // If it is a movie, use the new Desktop/TV style layout
+          if (!isShow) {
+            return _buildMovieLayout(
+              context,
+              detail,
+              downloadsAsync,
+              historyAsync,
+            );
+          }
+
           return SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1017,103 +1027,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
         error: (err, stack) => Center(child: Text('Error: $err')),
         loading: () => const Center(child: CircularProgressIndicator()),
       ),
-      floatingActionButton: detailAsync.asData?.value.type == 'movie'
-          ? Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (!widget.offlineMode) ...[
-                  FloatingActionButton(
-                    heroTag: 'download_fab',
-                    onPressed: () {
-                      final detail = detailAsync.asData!.value;
-                      showModalBottomSheet(
-                        context: context,
-                        isScrollControlled: true,
-                        builder: (context) => StreamSelectionSheet(
-                          externalId: detail.imdbId ?? detail.id,
-                          title: detail.title,
-                          type: 'movie',
-                          imdbId: detail.imdbId,
-                          onStreamSelected: (url, filename, quality) {
-                            // Start Download
-                            ref
-                                .read(downloadServiceProvider)
-                                .startDownload(
-                                  mediaUuid: detail.id,
-                                  url: url,
-                                  title: detail.title,
-                                  type: 'movie',
-                                  posterPath: detail.posterUrl,
-                                  backdropPath: detail.backdropUrl,
-                                  logoPath: detail.logo,
-                                  overview: detail.overview,
-                                  imdbId: detail.imdbId,
-                                  voteAverage: detail.rating,
-                                  seasonPosterPath:
-                                      null, // No season poster for movies
-                                  seasons: null, // No seasons for movies
-                                );
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Download started')),
-                            );
-                          },
-                        ),
-                      );
-                    },
-                    child: const Icon(Icons.download),
-                  ),
-                  const SizedBox(width: 16),
-                ],
-                FloatingActionButton.extended(
-                  heroTag: 'play_fab',
-                  onPressed: () async {
-                    final detail = detailAsync.asData!.value;
-
-                    int? startPos;
-                    if (historyAsync.hasValue &&
-                        historyAsync.value!.isNotEmpty) {
-                      final h = historyAsync.value!.first;
-                      if (!h.isWatched && h.positionTicks > 0) {
-                        startPos = h.positionTicks;
-                      }
-                    }
-
-                    final downloadedPath = await _resolveDownloadPath(
-                      ref,
-                      downloadsAsync.asData?.value ?? [],
-                      detail.imdbId ?? detail.id,
-                    );
-
-                    if (!context.mounted) return;
-
-                    showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      builder: (context) => StreamSelectionSheet(
-                        externalId:
-                            detail.imdbId ??
-                            detail.id, // Prefer IMDB ID if available
-                        title: detail.title,
-                        type: 'movie',
-                        startPosition: startPos,
-                        imdbId: detail.imdbId,
-                        downloadedPath: downloadedPath,
-                      ),
-                    );
-                  },
-                  icon: const Icon(Icons.play_arrow),
-                  label: Text(
-                    (historyAsync.hasValue &&
-                            historyAsync.value!.isNotEmpty &&
-                            !historyAsync.value!.first.isWatched &&
-                            historyAsync.value!.first.positionTicks > 0)
-                        ? 'Continue from ${_formatDuration(historyAsync.value!.first.positionTicks)}'
-                        : 'Play',
-                  ),
-                ),
-              ],
-            )
-          : null,
+      floatingActionButton: null,
     );
   }
 
@@ -1321,5 +1235,455 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
           .firstOrNull
           ?.posterPath;
     }
+  }
+
+  Widget _buildMovieLayout(
+    BuildContext context,
+    MediaDetail detail,
+    AsyncValue<List<TaskRecord>> downloadsAsync,
+    AsyncValue<List<HistoryItem>> historyAsync,
+  ) {
+    String? backdropUrl = detail.backdropUrl;
+    if (!widget.offlineMode &&
+        backdropUrl != null &&
+        backdropUrl.startsWith('/')) {
+      backdropUrl = 'https://image.tmdb.org/t/p/original$backdropUrl';
+    }
+
+    String? posterUrl = detail.posterUrl;
+    if (!widget.offlineMode && posterUrl != null && posterUrl.startsWith('/')) {
+      posterUrl = 'https://image.tmdb.org/t/p/w780$posterUrl';
+    }
+
+    final logoUrl = detail
+        .logo; // Assuming fully qualified or handled by Image widget if typical
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // 1. Backdrop Image with Shader Mask
+        if (backdropUrl != null)
+          Positioned.fill(
+            child: widget.offlineMode
+                ? Image.file(
+                    File(backdropUrl),
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: Theme.of(context).scaffoldBackgroundColor,
+                    ),
+                  )
+                : Image.network(
+                    backdropUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: Theme.of(context).scaffoldBackgroundColor,
+                    ),
+                  ),
+          ),
+
+        // 2. Gradient Overlay (Fade to background at bottom)
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Theme.of(context).scaffoldBackgroundColor.withOpacity(0.1),
+                  Theme.of(context).scaffoldBackgroundColor,
+                ],
+                stops: const [0.0, 0.7],
+              ),
+            ),
+          ),
+        ),
+
+        // 3. Content Columns
+        Positioned.fill(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(48.0, 32.0, 48.0, 64.0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                // Column 1: Poster (25%)
+                Expanded(
+                  flex: 3, // ~25% of 12
+                  child: AspectRatio(
+                    aspectRatio: 2 / 3,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.5),
+                            blurRadius: 20,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: posterUrl != null
+                            ? (widget.offlineMode
+                                  ? Image.file(
+                                      File(posterUrl),
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Container(
+                                        color: Colors.grey[900],
+                                        child: const Icon(
+                                          Icons.movie,
+                                          size: 50,
+                                        ),
+                                      ),
+                                    )
+                                  : Image.network(posterUrl, fit: BoxFit.cover))
+                            : Container(
+                                color: Colors.grey[900],
+                                child: const Icon(Icons.movie, size: 50),
+                              ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 32),
+
+                // Column 2: Logo + Buttons (33%)
+                Expanded(
+                  flex: 4, // ~33.3% of 12
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (logoUrl != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 24.0),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 120),
+                            child: widget.offlineMode
+                                ? Image.file(File(logoUrl), fit: BoxFit.contain)
+                                : Image.network(logoUrl, fit: BoxFit.contain),
+                          ),
+                        ),
+
+                      const SizedBox(height: 16),
+                      // Buttons Row
+                      Row(
+                        children: [
+                          // Add to Library Button (Square)
+                          if (!widget.offlineMode)
+                            Consumer(
+                              builder: (context, ref, child) {
+                                final statusAsync = ref.watch(
+                                  libraryStatusProvider(widget.itemId),
+                                );
+                                return statusAsync.when(
+                                  data: (inLibrary) => Container(
+                                    margin: const EdgeInsets.only(right: 16),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.surfaceContainerHighest,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: IconButton(
+                                      icon: Icon(
+                                        inLibrary ? Icons.check : Icons.add,
+                                      ),
+                                      tooltip: inLibrary
+                                          ? 'Remove from Library'
+                                          : 'Add to Library',
+                                      onPressed: () async {
+                                        try {
+                                          // Resolve type and preferred ID
+                                          final detail = ref
+                                              .read(
+                                                mediaDetailProvider(
+                                                  id: widget.itemId,
+                                                  type: widget.type!,
+                                                ),
+                                              )
+                                              .value;
+
+                                          final idToAdd =
+                                              detail?.imdbId ??
+                                              (detail?.id.isNotEmpty == true
+                                                  ? detail!.id
+                                                  : widget.itemId);
+                                          final typeToAdd =
+                                              detail?.type ?? widget.type;
+
+                                          await ref
+                                              .read(
+                                                libraryStatusProvider(
+                                                  widget.itemId,
+                                                ).notifier,
+                                              )
+                                              .toggle(
+                                                typeToAdd!,
+                                                idOverride: idToAdd,
+                                              );
+
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  inLibrary
+                                                      ? 'Removed from Library'
+                                                      : 'Added to Library',
+                                                ),
+                                              ),
+                                            );
+                                          }
+                                        } catch (e) {
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              SnackBar(
+                                                content: Text(
+                                                  'Action failed: $e',
+                                                ),
+                                              ),
+                                            );
+                                          }
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                  loading: () => Container(
+                                    width: 48,
+                                    height: 48,
+                                    margin: const EdgeInsets.only(right: 16),
+                                    child: const Center(
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    ),
+                                  ),
+                                  error: (_, __) => const SizedBox.shrink(),
+                                );
+                              },
+                            ),
+
+                          // Download Button (Square)
+                          if (!widget.offlineMode)
+                            Container(
+                              margin: const EdgeInsets.only(right: 16),
+                              decoration: BoxDecoration(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: IconButton(
+                                icon: const Icon(Icons.download_rounded),
+                                tooltip: 'Download Movie',
+                                onPressed: () {
+                                  // Trigger logic
+                                  showModalBottomSheet(
+                                    context: context,
+                                    isScrollControlled: true,
+                                    builder: (context) => StreamSelectionSheet(
+                                      externalId: detail.imdbId ?? detail.id,
+                                      title: detail.title,
+                                      type: 'movie',
+                                      imdbId: detail.imdbId,
+                                      onStreamSelected:
+                                          (url, filename, quality) {
+                                            ref
+                                                .read(downloadServiceProvider)
+                                                .startDownload(
+                                                  mediaUuid: detail.id,
+                                                  url: url,
+                                                  title: detail.title,
+                                                  type: 'movie',
+                                                  posterPath: detail.posterUrl,
+                                                  backdropPath:
+                                                      detail.backdropUrl,
+                                                  logoPath: detail.logo,
+                                                  overview: detail.overview,
+                                                  imdbId: detail.imdbId,
+                                                  voteAverage: detail.rating,
+                                                );
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              const SnackBar(
+                                                content: Text(
+                                                  'Download started',
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+
+                          // Play Button (Wide)
+                          Expanded(
+                            child: SizedBox(
+                              height: 52, // Wide and tall
+                              child: FilledButton.icon(
+                                style: FilledButton.styleFrom(
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                icon: const Icon(
+                                  Icons.play_arrow_rounded,
+                                  size: 28,
+                                ),
+                                label: Consumer(
+                                  builder: (context, ref, _) {
+                                    // Resume logic
+                                    String label = 'Play';
+                                    if (historyAsync.hasValue &&
+                                        historyAsync.value!.isNotEmpty) {
+                                      final h = historyAsync.value!.first;
+                                      if (!h.isWatched && h.positionTicks > 0) {
+                                        label =
+                                            'Resume ${_formatDuration(h.positionTicks)}';
+                                      }
+                                    }
+                                    return Text(
+                                      label,
+                                      style: const TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    );
+                                  },
+                                ),
+                                onPressed: () async {
+                                  int? startPos;
+                                  if (historyAsync.hasValue &&
+                                      historyAsync.value!.isNotEmpty) {
+                                    final h = historyAsync.value!.first;
+                                    if (!h.isWatched && h.positionTicks > 0) {
+                                      startPos = h.positionTicks;
+                                    }
+                                  }
+
+                                  final downloadedPath =
+                                      await _resolveDownloadPath(
+                                        ref,
+                                        downloadsAsync.asData?.value ?? [],
+                                        detail.imdbId ?? detail.id,
+                                      );
+
+                                  if (!context.mounted) return;
+
+                                  showModalBottomSheet(
+                                    context: context,
+                                    isScrollControlled: true,
+                                    builder: (context) => StreamSelectionSheet(
+                                      externalId: detail.imdbId ?? detail.id,
+                                      title: detail.title,
+                                      type: 'movie',
+                                      startPosition: startPos,
+                                      imdbId: detail.imdbId,
+                                      downloadedPath: downloadedPath,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 48),
+
+                // Column 3: Info (42%)
+                Expanded(
+                  flex: 5, // ~41.6% of 12
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        detail.title,
+                        style: Theme.of(context).textTheme.displayMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              shadows: [
+                                BoxShadow(
+                                  color: Colors.black,
+                                  blurRadius: 20,
+                                  offset: Offset(0, 2),
+                                ),
+                              ],
+                            ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          if (detail.rating != null) ...[
+                            const Icon(
+                              Icons.star,
+                              color: Colors.amber,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${detail.rating!.toStringAsFixed(1)}',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(width: 16),
+                          ],
+                          if (detail.releaseDate != null) ...[
+                            Text(
+                              detail.releaseDate!.split('-').first,
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(width: 16),
+                          ],
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              border: Border.all(color: Colors.white70),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              'MOVIE',
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        detail.overview ?? '',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          height: 1.4,
+                          fontSize: 16,
+                          shadows: [
+                            BoxShadow(color: Colors.black, blurRadius: 10),
+                          ],
+                        ),
+                        maxLines: 8,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      // Extra space at bottom
+                      const SizedBox(height: 16),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
