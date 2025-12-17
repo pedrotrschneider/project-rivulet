@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../player/player_screen.dart';
 import '../discovery_provider.dart';
 import '../repository/discovery_repository.dart';
 
@@ -155,27 +154,7 @@ class _StreamSelectionSheetState extends ConsumerState<StreamSelectionSheet> {
           return;
         }
 
-        int startPos = 0;
-        if (widget.startPosition != null && widget.startPosition! > 0) {
-          startPos = widget.startPosition!;
-        }
-
-        Navigator.pop(context); // Close sheet
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => PlayerScreen(
-              url: url,
-              externalId: widget.externalId,
-              title: widget.title,
-              type: widget.type,
-              season: widget.season,
-              episode: widget.episode,
-              startPosition: startPos,
-              imdbId: widget.imdbId,
-            ),
-          ),
-        );
+        Navigator.pop(context, url);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -290,22 +269,7 @@ class _StreamSelectionSheetState extends ConsumerState<StreamSelectionSheet> {
               subtitle: const Text('Local file'),
               trailing: const Icon(Icons.play_arrow),
               onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => PlayerScreen(
-                      url: 'file://${widget.downloadedPath}',
-                      externalId: widget.externalId,
-                      title: widget.title,
-                      type: widget.type,
-                      season: widget.season,
-                      episode: widget.episode,
-                      startPosition: widget.startPosition ?? 0,
-                      imdbId: widget.imdbId,
-                    ),
-                  ),
-                );
+                Navigator.pop(context, 'file://${widget.downloadedPath}');
               },
             ),
             const Divider(),
