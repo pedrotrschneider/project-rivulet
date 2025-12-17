@@ -36,7 +36,7 @@ final class ProfilesProvider
   Profiles create() => Profiles();
 }
 
-String _$profilesHash() => r'499e58309be9545cb745938eeeba708c858b99d0';
+String _$profilesHash() => r'3a4f3e03c9e2c42009e606554930c97ad595e2a8';
 
 /// Provider that fetches and caches the list of profiles for the current account.
 

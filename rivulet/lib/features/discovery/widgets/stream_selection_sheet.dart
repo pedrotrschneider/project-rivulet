@@ -12,6 +12,10 @@ class StreamSelectionSheet extends ConsumerStatefulWidget {
   final int? episode;
   final int? startPosition;
   final String? imdbId;
+  final Function(String url, String? fileName, String quality)?
+  onStreamSelected;
+  final VoidCallback? onSkip;
+  final VoidCallback? onSkipRemaining;
 
   const StreamSelectionSheet({
     super.key,
@@ -22,7 +26,13 @@ class StreamSelectionSheet extends ConsumerStatefulWidget {
     this.episode,
     this.startPosition,
     this.imdbId,
+    this.onStreamSelected,
+    this.onSkip,
+    this.onSkipRemaining,
+    this.downloadedPath,
   });
+
+  final String? downloadedPath;
 
   @override
   ConsumerState<StreamSelectionSheet> createState() =>
@@ -130,6 +140,21 @@ class _StreamSelectionSheetState extends ConsumerState<StreamSelectionSheet> {
       final url = result['url'] as String?;
 
       if (url != null) {
+        if (widget.onStreamSelected != null) {
+          // If in download mode (callback provided), return the stream info
+          // We need quality/filename from somewhere?
+          // Use 'magnet' or pass more data from resolveStream result if available?
+          // result['url'] is the direct link.
+          widget.onStreamSelected!(url, null, "Unknown");
+          // Improving this: resolveStream returns simple map.
+          // We might want to pass 'stream.quality' which was selected.
+          // But 'stream' object is in the UI loop, here we only have magnet string.
+          // Ideally we pass stream object to _handleStreamSelection?
+          // For now, let's just pass URL.
+          Navigator.pop(context);
+          return;
+        }
+
         int startPos = 0;
         if (widget.startPosition != null && widget.startPosition! > 0) {
           startPos = widget.startPosition!;
@@ -175,6 +200,7 @@ class _StreamSelectionSheetState extends ConsumerState<StreamSelectionSheet> {
 
   @override
   Widget build(BuildContext context) {
+    // Always scrape if opened (online mode)
     final streamAsync = ref.watch(
       streamScraperProvider(
         externalId: widget.externalId,
@@ -230,7 +256,60 @@ class _StreamSelectionSheetState extends ConsumerState<StreamSelectionSheet> {
               ),
             ],
           ),
+          if (widget.onSkip != null || widget.onSkipRemaining != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  if (widget.onSkip != null)
+                    TextButton(
+                      onPressed: () {
+                        widget.onSkip!();
+                        Navigator.pop(context);
+                      },
+                      child: const Text('Skip This'),
+                    ),
+                  if (widget.onSkipRemaining != null)
+                    TextButton(
+                      onPressed: () {
+                        widget.onSkipRemaining!();
+                        Navigator.pop(context);
+                      },
+                      child: const Text('Cancel Remaining'),
+                    ),
+                ],
+              ),
+            ),
           const Divider(),
+          if (widget.downloadedPath != null &&
+              widget.onStreamSelected == null) ...[
+            ListTile(
+              leading: const Icon(Icons.download_done, color: Colors.green),
+              title: const Text('Play Downloaded'),
+              subtitle: const Text('Local file'),
+              trailing: const Icon(Icons.play_arrow),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => PlayerScreen(
+                      url: 'file://${widget.downloadedPath}',
+                      externalId: widget.externalId,
+                      title: widget.title,
+                      type: widget.type,
+                      season: widget.season,
+                      episode: widget.episode,
+                      startPosition: widget.startPosition ?? 0,
+                      imdbId: widget.imdbId,
+                    ),
+                  ),
+                );
+              },
+            ),
+            const Divider(),
+          ],
           if (_isResolving)
             const Expanded(
               child: Center(

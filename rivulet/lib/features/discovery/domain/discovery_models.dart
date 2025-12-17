@@ -163,6 +163,17 @@ class DiscoverySeason {
       episodeCount: json['episode_count'] as int? ?? 0,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'poster_path': posterPath,
+      'season_number': seasonNumber,
+      'air_date': airDate,
+      'episode_count': episodeCount,
+    };
+  }
 }
 
 class DiscoveryEpisode {

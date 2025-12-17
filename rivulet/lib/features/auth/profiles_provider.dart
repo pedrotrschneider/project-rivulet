@@ -11,16 +11,28 @@ part 'profiles_provider.g.dart';
 class Profiles extends _$Profiles {
   @override
   Future<List<Profile>> build() async {
+    return _fetchOrCache();
+  }
+
+  Future<List<Profile>> _fetchOrCache() async {
     final repo = ref.read(profilesRepositoryProvider);
-    return await repo.fetchProfiles();
+    try {
+      return await repo.fetchProfiles();
+    } catch (e) {
+      // Try cache
+      final cached = await repo.getCachedProfiles();
+      if (cached.isNotEmpty) {
+        return cached;
+      }
+      rethrow;
+    }
   }
 
   /// Refreshes the profile list from the server.
   Future<void> refresh() async {
     state = const AsyncValue.loading();
     try {
-      final repo = ref.read(profilesRepositoryProvider);
-      final profiles = await repo.fetchProfiles();
+      final profiles = await _fetchOrCache();
       state = AsyncValue.data(profiles);
     } catch (e, st) {
       state = AsyncValue.error(e, st);

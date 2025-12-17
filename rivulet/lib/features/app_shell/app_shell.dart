@@ -5,6 +5,9 @@ import '../library/library_screen.dart';
 import '../auth/auth_provider.dart';
 import '../auth/profiles_provider.dart';
 
+import '../downloads/screens/downloads_screen.dart'; // Import this
+import '../../core/network/network_monitor.dart';
+
 /// Main app shell with Stremio-style side navigation.
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key});
@@ -27,8 +30,12 @@ class _AppShellState extends ConsumerState<AppShell> {
       selectedIcon: Icons.video_library,
       label: 'Library',
     ),
+    _NavItem(
+      icon: Icons.download_outlined,
+      selectedIcon: Icons.download,
+      label: 'Downloads',
+    ),
     // Future tabs can be added here
-    // _NavItem(icon: Icons.download_outlined, selectedIcon: Icons.download, label: 'Downloads'),
     // _NavItem(icon: Icons.settings_outlined, selectedIcon: Icons.settings, label: 'Settings'),
   ];
 
@@ -38,6 +45,8 @@ class _AppShellState extends ConsumerState<AppShell> {
         return const DiscoveryScreen();
       case 1:
         return const LibraryScreen();
+      case 2:
+        return const DownloadsScreen();
       default:
         return const DiscoveryScreen();
     }
@@ -47,6 +56,34 @@ class _AppShellState extends ConsumerState<AppShell> {
   Widget build(BuildContext context) {
     final profiles = ref.watch(profilesProvider);
     final selectedProfileId = ref.watch(selectedProfileProvider);
+    final isOnline = ref.watch(networkMonitorProvider);
+
+    // React to connectivity changes
+    ref.listen(networkMonitorProvider, (previous, current) {
+      if (previous == true && current == false) {
+        // Lost internet: Force to Downloads
+        if (_selectedIndex != 2) {
+          setState(() {
+            _selectedIndex = 2;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Offline mode active. Accessing Downloads.'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } else if (previous == false && current == true) {
+        // Regained internet: Re-check auth
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Back online. Reconnecting...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+        ref.read(authProvider.notifier).checkStatus();
+      }
+    });
 
     // Get current profile name
     String profileName = 'Profile';
@@ -66,7 +103,18 @@ class _AppShellState extends ConsumerState<AppShell> {
           _SideNavRail(
             selectedIndex: _selectedIndex,
             items: _navItems,
+            isOnline: isOnline,
             onItemSelected: (index) {
+              if (!isOnline && index != 2) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'This section requires an internet connection.',
+                    ),
+                  ),
+                );
+                return;
+              }
               setState(() => _selectedIndex = index);
             },
             profileName: profileName,
@@ -106,6 +154,7 @@ class _SideNavRail extends StatelessWidget {
   final String profileName;
   final VoidCallback onChangeProfile;
   final VoidCallback onLogout;
+  final bool isOnline;
 
   const _SideNavRail({
     required this.selectedIndex,
@@ -114,6 +163,7 @@ class _SideNavRail extends StatelessWidget {
     required this.profileName,
     required this.onChangeProfile,
     required this.onLogout,
+    required this.isOnline,
   });
 
   @override
@@ -144,11 +194,14 @@ class _SideNavRail extends StatelessWidget {
               itemBuilder: (context, index) {
                 final item = items[index];
                 final isSelected = index == selectedIndex;
+                // Index 2 is Downloads, others disabled if offline
+                final isDisabled = !isOnline && index != 2;
 
                 return _NavButton(
                   icon: isSelected ? item.selectedIcon : item.icon,
                   label: item.label,
                   isSelected: isSelected,
+                  isDisabled: isDisabled,
                   onTap: () => onItemSelected(index),
                 );
               },
@@ -215,12 +268,14 @@ class _NavButton extends StatefulWidget {
   final IconData icon;
   final String label;
   final bool isSelected;
+  final bool isDisabled;
   final VoidCallback onTap;
 
   const _NavButton({
     required this.icon,
     required this.label,
     required this.isSelected,
+    this.isDisabled = false,
     required this.onTap,
   });
 
@@ -233,7 +288,9 @@ class _NavButtonState extends State<_NavButton> {
 
   @override
   Widget build(BuildContext context) {
-    final color = widget.isSelected
+    final color = widget.isDisabled
+        ? Colors.grey.shade800
+        : widget.isSelected
         ? Colors.deepPurple.shade300
         : _isHovered
         ? Colors.white

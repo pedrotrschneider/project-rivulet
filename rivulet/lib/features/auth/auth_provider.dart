@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../api/rivulet_api.dart';
 import 'auth_repository.dart';
 import 'profiles_provider.dart';
+import 'package:dio/dio.dart';
 
 part 'auth_provider.g.dart';
 
@@ -65,8 +66,19 @@ class Auth extends _$Auth {
         await repo.checkHealth();
         _startValidationTimer();
       } catch (e) {
-        print('Session invalid on startup: $e');
-        await logout();
+        if (e is DioException &&
+            (e.type == DioExceptionType.connectionError ||
+                e.type == DioExceptionType.sendTimeout ||
+                e.type == DioExceptionType.receiveTimeout)) {
+          // Offline/Network issue: assume valid for now
+          print('Offline detected on startup, assuming valid session.');
+          // Don't start validation timer yet, wait for connection?
+          //Actually, starting it is fine, it will just fail and catch below.
+          _startValidationTimer();
+        } else {
+          print('Session invalid on startup: $e');
+          await logout();
+        }
       }
     } else {
       state = false;
@@ -80,6 +92,13 @@ class Auth extends _$Auth {
         final repo = ref.read(authRepositoryProvider);
         await repo.checkHealth();
       } catch (e) {
+        if (e is DioException &&
+            (e.type == DioExceptionType.connectionError ||
+                e.type == DioExceptionType.sendTimeout ||
+                e.type == DioExceptionType.receiveTimeout)) {
+          // Ignore network errors
+          return;
+        }
         print('Session expired during validation: $e');
         _timer?.cancel();
         await logout();

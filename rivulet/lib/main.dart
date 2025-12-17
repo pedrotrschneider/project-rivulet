@@ -9,8 +9,22 @@ import 'package:rivulet/features/auth/screens/server_setup_screen.dart';
 import 'package:rivulet/features/app_shell/app_shell.dart';
 import 'package:rivulet/features/player/player_screen.dart';
 
+import 'dart:io';
+import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
+import 'package:rivulet/core/platform/linux_path_provider.dart';
+import 'package:rivulet/core/network/network_monitor.dart';
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+
+  if (Platform.isLinux) {
+    try {
+      PathProviderPlatform.instance = LinuxPathProviderOverride();
+    } catch (_) {
+      // Ignore if fails, fallback to default might work or crash later
+    }
+  }
+
   fvp.registerWith();
   runApp(const ProviderScope(child: MyApp()));
 }
@@ -31,6 +45,7 @@ class _MyAppState extends ConsumerState<MyApp> {
       await ref.read(serverUrlProvider.notifier).load();
       await ref.read(authProvider.notifier).checkStatus();
       await ref.read(selectedProfileProvider.notifier).load();
+      ref.read(networkMonitorProvider); // Initialize monitoring
     });
   }
 
