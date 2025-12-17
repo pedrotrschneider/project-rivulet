@@ -78,7 +78,7 @@ func Start() {
 	// History
 	v1.POST("/history/progress", UpdateProgress)
 	v1.GET("/history", GetHistory)
-	v1.GET("/history/media", GetMediaHistory)
+	v1.GET("/history/media", GetHistory)
 	v1.DELETE("/history/:media_id", DeleteHistory)
 
 	e.Logger.Fatal(e.Start(":8080"))

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 import 'package:fvp/fvp.dart' as fvp;
 import 'package:rivulet/features/discovery/repository/discovery_repository.dart';
+import 'package:rivulet/features/discovery/discovery_provider.dart';
 
 class PlayerScreen extends ConsumerStatefulWidget {
   final String url;
@@ -140,6 +141,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
     try {
       await ref.read(discoveryRepositoryProvider).updateProgress([progress]);
+      ref.invalidate(
+        mediaHistoryProvider(externalId: widget.externalId, type: widget.type),
+      );
     } catch (e) {
       debugPrint('Failed to sync progress: $e');
     }
@@ -236,7 +240,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   void dispose() {
     _progressTimer?.cancel();
     _hideControlsTimer?.cancel();
-    _reportProgress(); // Last sync
     _controller.dispose();
     super.dispose();
   }
@@ -279,8 +282,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                 BackButton(
                   color: Colors.white,
                   onPressed: () {
-                    _reportProgress();
-                    Navigator.pop(context);
+                    _reportProgress().then((_) => Navigator.pop(context));
                   },
                 ),
                 Expanded(

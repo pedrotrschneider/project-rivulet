@@ -14,6 +14,13 @@ import '../../downloads/services/download_service.dart';
 import '../../downloads/providers/downloads_provider.dart';
 import '../../downloads/providers/offline_providers.dart';
 import '../../player/player_screen.dart';
+import '../widgets/media_detail/backdrop_background.dart';
+import '../widgets/media_detail/poster_banner.dart';
+import '../widgets/media_detail/play_button.dart';
+import '../widgets/media_detail/library_button.dart';
+import '../widgets/media_detail/season_list.dart';
+import '../widgets/media_detail/episode_card.dart';
+import '../widgets/media_detail/continue_watching_card.dart';
 
 // Enum for Show View State
 enum ShowViewMode { main, season, episode }
@@ -39,18 +46,6 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
   ShowViewMode _viewMode = ShowViewMode.main;
   int? _selectedSeason; // Nullable to allow Deselect
   DiscoveryEpisode? _selectedEpisode; // For Screen 3
-
-  String _formatDuration(int ticks) {
-    if (ticks <= 0) return '';
-    final duration = Duration(microseconds: ticks ~/ 10);
-    final hours = duration.inHours;
-    final minutes = duration.inMinutes.remainder(60);
-    final seconds = duration.inSeconds.remainder(60);
-    if (hours > 0) {
-      return '$hours:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
-    }
-    return '$minutes:${seconds.toString().padLeft(2, '0')}';
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -439,71 +434,22 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
     }
   }
 
-  Widget _buildBackdrop(BuildContext context, String? backdropUrl) {
-    if (!widget.offlineMode &&
-        backdropUrl != null &&
-        backdropUrl.startsWith('/')) {
-      backdropUrl = 'https://image.tmdb.org/t/p/original$backdropUrl';
-    }
-
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        if (backdropUrl != null)
-          Positioned.fill(
-            child: widget.offlineMode
-                ? Image.file(
-                    File(backdropUrl),
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: Theme.of(context).scaffoldBackgroundColor,
-                    ),
-                  )
-                : Image.network(
-                    backdropUrl,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: Theme.of(context).scaffoldBackgroundColor,
-                    ),
-                  ),
-          ),
-        Positioned.fill(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Theme.of(context).scaffoldBackgroundColor.withOpacity(0.1),
-                  Theme.of(context).scaffoldBackgroundColor,
-                ],
-                stops: const [0.0, 0.7],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildMovieLayout(
     BuildContext context,
     MediaDetail detail,
     AsyncValue<List<TaskRecord>> downloadsAsync,
     AsyncValue<List<HistoryItem>> historyAsync,
   ) {
-    String? posterUrl = detail.posterUrl;
-    if (!widget.offlineMode && posterUrl != null && posterUrl.startsWith('/')) {
-      posterUrl = 'https://image.tmdb.org/t/p/w780$posterUrl';
-    }
-
     final logoUrl = detail
         .logo; // Assuming fully qualified or handled by Image widget if typical
 
     return Stack(
       fit: StackFit.expand,
       children: [
-        _buildBackdrop(context, detail.backdropUrl),
+        BackdropBackground(
+          backdropUrl: detail.backdropUrl,
+          offlineMode: widget.offlineMode,
+        ),
 
         // 3. Content Columns
         Positioned.fill(
@@ -515,41 +461,9 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                 // Column 1: Poster (25%)
                 Expanded(
                   flex: 3, // ~25% of 12
-                  child: AspectRatio(
-                    aspectRatio: 2 / 3,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.5),
-                            blurRadius: 20,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: posterUrl != null
-                            ? (widget.offlineMode
-                                  ? Image.file(
-                                      File(posterUrl),
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => Container(
-                                        color: Colors.grey[900],
-                                        child: const Icon(
-                                          Icons.movie,
-                                          size: 50,
-                                        ),
-                                      ),
-                                    )
-                                  : Image.network(posterUrl, fit: BoxFit.cover))
-                            : Container(
-                                color: Colors.grey[900],
-                                child: const Icon(Icons.movie, size: 50),
-                              ),
-                      ),
-                    ),
+                  child: PosterBanner(
+                    posterUrl: detail.posterUrl,
+                    offlineMode: widget.offlineMode,
                   ),
                 ),
                 const SizedBox(width: 32),
@@ -657,102 +571,13 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                       // Buttons Row
                       Row(
                         children: [
-                          // Add to Library Button (Square)
                           if (!widget.offlineMode)
-                            Consumer(
-                              builder: (context, ref, child) {
-                                final statusAsync = ref.watch(
-                                  libraryStatusProvider(widget.itemId),
-                                );
-                                return statusAsync.when(
-                                  data: (inLibrary) => Container(
-                                    margin: const EdgeInsets.only(right: 16),
-                                    decoration: BoxDecoration(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.surfaceContainerHighest,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: IconButton(
-                                      icon: Icon(
-                                        inLibrary ? Icons.check : Icons.add,
-                                      ),
-                                      tooltip: inLibrary
-                                          ? 'Remove from Library'
-                                          : 'Add to Library',
-                                      onPressed: () async {
-                                        try {
-                                          // Resolve type and preferred ID
-                                          final detail = ref
-                                              .read(
-                                                mediaDetailProvider(
-                                                  id: widget.itemId,
-                                                  type: widget.type!,
-                                                ),
-                                              )
-                                              .value;
-
-                                          final idToAdd =
-                                              detail?.imdbId ??
-                                              (detail?.id.isNotEmpty == true
-                                                  ? detail!.id
-                                                  : widget.itemId);
-                                          final typeToAdd =
-                                              detail?.type ?? widget.type;
-
-                                          await ref
-                                              .read(
-                                                libraryStatusProvider(
-                                                  widget.itemId,
-                                                ).notifier,
-                                              )
-                                              .toggle(
-                                                typeToAdd!,
-                                                idOverride: idToAdd,
-                                              );
-
-                                          if (context.mounted) {
-                                            ScaffoldMessenger.of(
-                                              context,
-                                            ).showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                  inLibrary
-                                                      ? 'Removed from Library'
-                                                      : 'Added to Library',
-                                                ),
-                                              ),
-                                            );
-                                          }
-                                        } catch (e) {
-                                          if (context.mounted) {
-                                            ScaffoldMessenger.of(
-                                              context,
-                                            ).showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                  'Action failed: $e',
-                                                ),
-                                              ),
-                                            );
-                                          }
-                                        }
-                                      },
-                                    ),
-                                  ),
-                                  loading: () => Container(
-                                    width: 48,
-                                    height: 48,
-                                    margin: const EdgeInsets.only(right: 16),
-                                    child: const Center(
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    ),
-                                  ),
-                                  error: (_, __) => const SizedBox.shrink(),
-                                );
-                              },
+                            LibraryButton(
+                              itemId: widget.itemId,
+                              type:
+                                  widget.type ??
+                                  'movie', // defaulting to type logic
+                              offlineMode: widget.offlineMode,
                             ),
 
                           // Download Button (Square)
@@ -813,165 +638,73 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
 
                           // Play Button with Progress Overlay
                           Expanded(
-                            child: Builder(
-                              builder: (context) {
-                                double progress = 0.0;
-                                String label = 'Play';
-                                int? startPos;
+                            child: ConnectedPlayButton(
+                              externalId: detail.imdbId ?? detail.id,
+                              type: 'movie',
+                              onPressed: (int? startPos) async {
+                                final downloadedPath =
+                                    await _resolveDownloadPath(
+                                      ref,
+                                      downloadsAsync.asData?.value ?? [],
+                                      detail.imdbId ?? detail.id,
+                                    );
 
-                                if (historyAsync.hasValue &&
-                                    historyAsync.value!.isNotEmpty) {
-                                  final h = historyAsync.value!.first;
-                                  if (!h.isWatched && h.positionTicks > 0) {
-                                    label =
-                                        'Resume ${_formatDuration(h.positionTicks)}';
-                                    startPos = h.positionTicks;
-                                    if (h.durationTicks > 0) {
-                                      progress =
-                                          h.positionTicks / h.durationTicks;
-                                      if (progress > 1.0) progress = 1.0;
+                                if (!context.mounted) return;
+
+                                final url = await showModalBottomSheet<String>(
+                                  context: context,
+                                  isScrollControlled: true,
+                                  builder: (context) => StreamSelectionSheet(
+                                    externalId: detail.imdbId ?? detail.id,
+                                    title: detail.title,
+                                    type: 'movie',
+                                    startPosition: startPos,
+                                    imdbId: detail.imdbId,
+                                    downloadedPath: downloadedPath,
+                                  ),
+                                );
+
+                                if (url != null && context.mounted) {
+                                  await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => PlayerScreen(
+                                        url: url,
+                                        externalId: detail.imdbId ?? detail.id,
+                                        title: detail.title,
+                                        type: 'movie',
+                                        startPosition:
+                                            startPos ??
+                                            0, // calculated locally above
+                                        imdbId: detail.imdbId,
+                                      ),
+                                    ),
+                                  );
+
+                                  if (mounted) {
+                                    // Sync history and reload details on exit
+                                    if (widget.offlineMode) {
+                                      ref.invalidate(
+                                        offlineMediaDetailProvider(
+                                          id: widget.itemId,
+                                        ),
+                                      );
+                                    } else {
+                                      ref.invalidate(
+                                        mediaDetailProvider(
+                                          id: widget.itemId,
+                                          type: widget.type ?? 'movie',
+                                        ),
+                                      );
+                                      ref.invalidate(
+                                        mediaHistoryProvider(
+                                          externalId: widget.itemId,
+                                          type: 'movie',
+                                        ),
+                                      );
                                     }
                                   }
                                 }
-
-                                return SizedBox(
-                                  height: 52,
-                                  child: Material(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                    borderRadius: BorderRadius.circular(12),
-                                    clipBehavior: Clip.antiAlias,
-                                    child: InkWell(
-                                      onTap: () async {
-                                        final downloadedPath =
-                                            await _resolveDownloadPath(
-                                              ref,
-                                              downloadsAsync.asData?.value ??
-                                                  [],
-                                              detail.imdbId ?? detail.id,
-                                            );
-
-                                        if (!context.mounted) return;
-
-                                        final url =
-                                            await showModalBottomSheet<String>(
-                                              context: context,
-                                              isScrollControlled: true,
-                                              builder: (context) =>
-                                                  StreamSelectionSheet(
-                                                    externalId:
-                                                        detail.imdbId ??
-                                                        detail.id,
-                                                    title: detail.title,
-                                                    type: 'movie',
-                                                    startPosition: startPos,
-                                                    imdbId: detail.imdbId,
-                                                    downloadedPath:
-                                                        downloadedPath,
-                                                  ),
-                                            );
-
-                                        if (url != null && context.mounted) {
-                                          await Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (context) => PlayerScreen(
-                                                url: url,
-                                                externalId:
-                                                    detail.imdbId ?? detail.id,
-                                                title: detail.title,
-                                                type: 'movie',
-                                                startPosition:
-                                                    startPos ??
-                                                    0, // calculated locally above
-                                                imdbId: detail.imdbId,
-                                              ),
-                                            ),
-                                          );
-
-                                          if (mounted) {
-                                            // Sync history and reload details on exit
-                                            if (widget.offlineMode) {
-                                              ref.invalidate(
-                                                offlineMediaDetailProvider(
-                                                  id: widget.itemId,
-                                                ),
-                                              );
-                                            } else {
-                                              ref.invalidate(
-                                                mediaDetailProvider(
-                                                  id: widget.itemId,
-                                                  type: widget.type ?? 'movie',
-                                                ),
-                                              );
-                                              ref.invalidate(
-                                                mediaHistoryProvider(
-                                                  externalId: widget.itemId,
-                                                  type: 'movie',
-                                                ),
-                                              );
-                                            }
-                                          }
-                                        }
-                                      },
-                                      child: Stack(
-                                        children: [
-                                          // Progress Bar (Dark Overlay)
-                                          if (progress > 0)
-                                            Positioned.fill(
-                                              child: LayoutBuilder(
-                                                builder:
-                                                    (context, constraints) {
-                                                      return Align(
-                                                        alignment: Alignment
-                                                            .centerLeft,
-                                                        child: Container(
-                                                          width:
-                                                              constraints
-                                                                  .maxWidth *
-                                                              progress,
-                                                          color: Colors.black
-                                                              .withOpacity(
-                                                                0.25,
-                                                              ),
-                                                        ),
-                                                      );
-                                                    },
-                                              ),
-                                            ),
-
-                                          // Content
-                                          Center(
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(
-                                                  Icons.play_arrow_rounded,
-                                                  size: 28,
-                                                  color: Theme.of(
-                                                    context,
-                                                  ).colorScheme.onPrimary,
-                                                ),
-                                                const SizedBox(width: 8),
-                                                Text(
-                                                  label,
-                                                  style: TextStyle(
-                                                    fontSize: 18,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: Theme.of(
-                                                      context,
-                                                    ).colorScheme.onPrimary,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                );
                               },
                             ),
                           ),
@@ -1052,177 +785,176 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
         // Resolve Downloads
         final downloads = downloadsAsync.value ?? [];
 
-        return Padding(
-          padding: const EdgeInsets.all(32.0),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Left Column: Poster (Flex 3)
-              Expanded(
-                flex: 3,
-                child: Column(
-                  children: [
-                    AspectRatio(
-                      aspectRatio: 2 / 3,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.5),
-                              blurRadius: 20,
-                            ),
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: posterUrlToUse != null
-                              ? Image.network(posterUrlToUse, fit: BoxFit.cover)
-                              : Container(
-                                  color: Colors.grey[900],
-                                  child: const Icon(Icons.tv, size: 50),
-                                ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    // Back Button
-                    // Back Button Removed as per request
-                  ],
-                ),
-              ),
-
-              const SizedBox(width: 32),
-
-              // Right Column: Episodes (Flex 9)
-              Expanded(
-                flex: 9,
-                child: Column(
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            BackdropBackground(
+              backdropUrl: detail.backdropUrl,
+              offlineMode: widget.offlineMode,
+            ),
+            Positioned.fill(
+              child: Padding(
+                padding: const EdgeInsets.all(32.0),
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Header
-                    Row(
-                      children: [
-                        // Download Season Button
-                        FilledButton.icon(
-                          onPressed: () {
-                            // Batch Download
-                            _startBulkDownload(
-                              episodes,
-                              detail,
-                              _selectedSeason!,
-                              downloads,
-                            );
-                          },
-                          icon: const Icon(Icons.download_rounded),
-                          label: const Text('Download Season'),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: Theme.of(
-                              context,
-                            ).colorScheme.tertiary,
-                            foregroundColor: Theme.of(
-                              context,
-                            ).colorScheme.onTertiary,
+                    // Left Column: Poster (Flex 3)
+                    Expanded(
+                      flex: 3,
+                      child: Column(
+                        children: [
+                          PosterBanner(
+                            posterUrl: posterUrlToUse,
+                            offlineMode: widget.offlineMode,
+                            placeholderIcon: Icons.tv,
                           ),
-                        ),
-                        const SizedBox(width: 24),
-                        // Title Group
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              detail.title,
-                              style: Theme.of(context).textTheme.headlineMedium
-                                  ?.copyWith(fontWeight: FontWeight.bold),
-                            ),
-                            Text(
-                              'Season $_selectedSeason',
-                              style: Theme.of(context).textTheme.titleLarge
-                                  ?.copyWith(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.secondary,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ],
+                          const SizedBox(height: 24),
+                          // Back Button
+                          // Back Button Removed as per request
+                        ],
+                      ),
                     ),
 
-                    const Divider(height: 32),
+                    const SizedBox(width: 32),
 
-                    // Episode List
+                    // Right Column: Episodes (Flex 9)
                     Expanded(
-                      child: ListView.separated(
-                        itemCount: episodes.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 16),
-                        itemBuilder: (context, index) {
-                          final episode = episodes[index];
-
-                          // Find Download Task
-                          final task = downloads.firstWhereOrNull((r) {
-                            final meta = _getTaskMetadata(r);
-                            return (meta['mediaId'] == detail.id ||
-                                    meta['mediaId'] == detail.imdbId) &&
-                                meta['season'] == _selectedSeason &&
-                                meta['episode'] == episode.episodeNumber;
-                          });
-
-                          // Find History
-                          final historyItem = historyAsync.value
-                              ?.firstWhereOrNull(
-                                (h) =>
-                                    (h.mediaId == detail.id ||
-                                        h.mediaId == detail.imdbId) &&
-                                    h.seasonNumber == _selectedSeason &&
-                                    h.episodeNumber == episode.episodeNumber,
-                              );
-
-                          return _EpisodeCard(
-                            episode: episode,
-                            history: historyItem,
-                            downloadTask: task,
-                            onTap: () {
-                              setState(() {
-                                _selectedEpisode = episode;
-                                _viewMode = ShowViewMode.episode;
-                              });
-                            },
-                            onPlay: () {
-                              // Play logic
-                            },
-                            onDownload: () {
-                              ref
-                                  .read(downloadServiceProvider)
-                                  .startDownload(
-                                    mediaUuid: detail.id,
-                                    url: '',
-                                    title:
-                                        '${detail.title} - S${_selectedSeason}E${episode.episodeNumber}',
-                                    type: 'show',
-                                    posterPath: detail.posterUrl,
-                                    backdropPath: detail.backdropUrl,
-                                    logoPath: detail.logo,
-                                    overview: episode.overview,
-                                    imdbId: detail.imdbId,
-                                    seasonNumber: _selectedSeason,
-                                    episodeNumber: episode.episodeNumber,
+                      flex: 9,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Header
+                          Row(
+                            children: [
+                              // Download Season Button
+                              FilledButton.icon(
+                                onPressed: () {
+                                  // Batch Download
+                                  _startBulkDownload(
+                                    episodes,
+                                    detail,
+                                    _selectedSeason!,
+                                    downloads,
                                   );
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Download started'),
+                                },
+                                icon: const Icon(Icons.download_rounded),
+                                label: const Text('Download Season'),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: Theme.of(
+                                    context,
+                                  ).colorScheme.tertiary,
+                                  foregroundColor: Theme.of(
+                                    context,
+                                  ).colorScheme.onTertiary,
                                 ),
-                              );
-                            },
-                          );
-                        },
+                              ),
+                              const SizedBox(width: 24),
+                              // Title Group
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    detail.title,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .headlineMedium
+                                        ?.copyWith(fontWeight: FontWeight.bold),
+                                  ),
+                                  Text(
+                                    'Season $_selectedSeason',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleLarge
+                                        ?.copyWith(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.secondary,
+                                        ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+
+                          const Divider(height: 32),
+
+                          // Episode List
+                          Expanded(
+                            child: ListView.separated(
+                              itemCount: episodes.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(height: 16),
+                              itemBuilder: (context, index) {
+                                final episode = episodes[index];
+
+                                // Find Download Task
+                                final task = downloads.firstWhereOrNull((r) {
+                                  final meta = _getTaskMetadata(r);
+                                  return (meta['mediaId'] == detail.id ||
+                                          meta['mediaId'] == detail.imdbId) &&
+                                      meta['season'] == _selectedSeason &&
+                                      meta['episode'] == episode.episodeNumber;
+                                });
+
+                                // Find History
+                                final historyItem = historyAsync.value
+                                    ?.firstWhereOrNull(
+                                      (h) =>
+                                          (h.mediaId == detail.id ||
+                                              h.mediaId == detail.imdbId) &&
+                                          h.seasonNumber == _selectedSeason &&
+                                          h.episodeNumber ==
+                                              episode.episodeNumber,
+                                    );
+
+                                return EpisodeCard(
+                                  episode: episode,
+                                  history: historyItem,
+                                  downloadTask: task,
+                                  onTap: () {
+                                    setState(() {
+                                      _selectedEpisode = episode;
+                                      _viewMode = ShowViewMode.episode;
+                                    });
+                                  },
+                                  onPlay: () {
+                                    // Play logic
+                                  },
+                                  onDownload: () {
+                                    ref
+                                        .read(downloadServiceProvider)
+                                        .startDownload(
+                                          mediaUuid: detail.id,
+                                          url: '',
+                                          title:
+                                              '${detail.title} - S${_selectedSeason}E${episode.episodeNumber}',
+                                          type: 'show',
+                                          posterPath: detail.posterUrl,
+                                          backdropPath: detail.backdropUrl,
+                                          logoPath: detail.logo,
+                                          overview: episode.overview,
+                                          imdbId: detail.imdbId,
+                                          seasonNumber: _selectedSeason,
+                                          episodeNumber: episode.episodeNumber,
+                                        );
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Download started'),
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         );
       },
     );
@@ -1265,7 +997,10 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        _buildBackdrop(context, detail.backdropUrl), // Use Show backdrop
+        BackdropBackground(
+          backdropUrl: detail.backdropUrl,
+          offlineMode: widget.offlineMode,
+        ), // Use Show backdrop
         Positioned.fill(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(48.0, 32.0, 48.0, 64.0),
@@ -1275,29 +1010,10 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                 // 1. Poster (Season)
                 Expanded(
                   flex: 3,
-                  child: AspectRatio(
-                    aspectRatio: 2 / 3,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.5),
-                            blurRadius: 20,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: posterUrlToUse != null
-                            ? Image.network(posterUrlToUse, fit: BoxFit.cover)
-                            : Container(
-                                color: Colors.grey[900],
-                                child: const Icon(Icons.tv, size: 50),
-                              ),
-                      ),
-                    ),
+                  child: PosterBanner(
+                    posterUrl: posterUrlToUse,
+                    offlineMode: widget.offlineMode,
+                    placeholderIcon: Icons.tv,
                   ),
                 ),
                 const SizedBox(width: 32),
@@ -1466,180 +1182,81 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
 
                           // Play Button with Progress Overlay
                           Expanded(
-                            child: Builder(
-                              builder: (context) {
-                                double progress = 0.0;
-                                String label = 'Play';
-                                int? startPos;
+                            child: ConnectedPlayButton(
+                              externalId: detail.imdbId ?? detail.id,
+                              type: detail.type,
+                              seasonNumber: _selectedSeason,
+                              episodeNumber: episode.episodeNumber,
+                              onPressed: (int? startPos) async {
+                                final downloadedPath =
+                                    await _resolveDownloadPath(
+                                      ref,
+                                      downloadsAsync.asData?.value ?? [],
+                                      detail.imdbId ?? detail.id,
+                                      season: _selectedSeason,
+                                      episode: episode.episodeNumber,
+                                    );
 
-                                if (historyAsync.hasValue) {
-                                  final h = historyAsync.value!
-                                      .firstWhereOrNull(
-                                        (item) =>
-                                            item.seasonNumber ==
-                                                _selectedSeason &&
-                                            item.episodeNumber ==
-                                                episode.episodeNumber,
+                                if (!context.mounted) return;
+
+                                final url = await showModalBottomSheet<String>(
+                                  context: context,
+                                  isScrollControlled: true,
+                                  builder: (context) => StreamSelectionSheet(
+                                    externalId: detail.imdbId ?? widget.itemId,
+                                    title:
+                                        'S${_selectedSeason}E${episode.episodeNumber} - ${episode.name}',
+                                    type: detail.type,
+                                    season: _selectedSeason,
+                                    episode: episode.episodeNumber,
+                                    imdbId: detail.imdbId,
+                                    startPosition: startPos,
+                                    downloadedPath: downloadedPath,
+                                  ),
+                                );
+
+                                if (url != null && context.mounted) {
+                                  await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => PlayerScreen(
+                                        url: url,
+                                        externalId:
+                                            detail.imdbId ?? widget.itemId,
+                                        title:
+                                            'S${_selectedSeason}E${episode.episodeNumber} - ${episode.name}',
+                                        type: detail.type,
+                                        season: _selectedSeason,
+                                        episode: episode.episodeNumber,
+                                        startPosition: startPos ?? 0,
+                                        imdbId: detail.imdbId,
+                                      ),
+                                    ),
+                                  );
+
+                                  if (mounted) {
+                                    if (widget.offlineMode) {
+                                      ref.invalidate(
+                                        offlineMediaDetailProvider(
+                                          id: widget.itemId,
+                                        ),
                                       );
-                                  if (h != null &&
-                                      !h.isWatched &&
-                                      h.positionTicks > 0) {
-                                    label =
-                                        'Resume ${_formatDuration(h.positionTicks)}';
-                                    startPos = h.positionTicks;
-                                    if (h.durationTicks > 0) {
-                                      progress =
-                                          h.positionTicks / h.durationTicks;
-                                      if (progress > 1.0) progress = 1.0;
+                                    } else {
+                                      ref.invalidate(
+                                        mediaDetailProvider(
+                                          id: widget.itemId,
+                                          type: detail.type,
+                                        ),
+                                      );
+                                      ref.invalidate(
+                                        mediaHistoryProvider(
+                                          externalId: widget.itemId,
+                                          type: detail.type,
+                                        ),
+                                      );
                                     }
                                   }
                                 }
-
-                                return SizedBox(
-                                  height: 52,
-                                  child: Material(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.primary,
-                                    borderRadius: BorderRadius.circular(12),
-                                    clipBehavior: Clip.antiAlias,
-                                    child: InkWell(
-                                      onTap: () async {
-                                        final downloadedPath =
-                                            await _resolveDownloadPath(
-                                              ref,
-                                              downloadsAsync.asData?.value ??
-                                                  [],
-                                              detail.imdbId ?? detail.id,
-                                              season: _selectedSeason,
-                                              episode: episode.episodeNumber,
-                                            );
-
-                                        if (!context.mounted) return;
-
-                                        final url =
-                                            await showModalBottomSheet<String>(
-                                              context: context,
-                                              isScrollControlled: true,
-                                              builder: (context) =>
-                                                  StreamSelectionSheet(
-                                                    externalId:
-                                                        detail.imdbId ??
-                                                        widget.itemId,
-                                                    title:
-                                                        'S${_selectedSeason}E${episode.episodeNumber} - ${episode.name}',
-                                                    type: 'show',
-                                                    season: _selectedSeason,
-                                                    episode:
-                                                        episode.episodeNumber,
-                                                    imdbId: detail.imdbId,
-                                                    startPosition: startPos,
-                                                    downloadedPath:
-                                                        downloadedPath,
-                                                  ),
-                                            );
-
-                                        if (url != null && context.mounted) {
-                                          await Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (context) => PlayerScreen(
-                                                url: url,
-                                                externalId:
-                                                    detail.imdbId ??
-                                                    widget.itemId,
-                                                title:
-                                                    'S${_selectedSeason}E${episode.episodeNumber} - ${episode.name}',
-                                                type: 'show',
-                                                season: _selectedSeason,
-                                                episode: episode.episodeNumber,
-                                                startPosition: startPos ?? 0,
-                                                imdbId: detail.imdbId,
-                                              ),
-                                            ),
-                                          );
-
-                                          if (mounted) {
-                                            if (widget.offlineMode) {
-                                              ref.invalidate(
-                                                offlineMediaDetailProvider(
-                                                  id: widget.itemId,
-                                                ),
-                                              );
-                                            } else {
-                                              ref.invalidate(
-                                                mediaDetailProvider(
-                                                  id: widget.itemId,
-                                                  type: widget.type ?? 'movie',
-                                                ),
-                                              );
-                                              ref.invalidate(
-                                                mediaHistoryProvider(
-                                                  externalId: widget.itemId,
-                                                  type: 'show',
-                                                ),
-                                              );
-                                            }
-                                          }
-                                        }
-                                      },
-                                      child: Stack(
-                                        children: [
-                                          // Fix for width: Use FractionallySizedBox inside the Stack if we want it relative to the button width
-                                          if (progress > 0)
-                                            Positioned.fill(
-                                              child: LayoutBuilder(
-                                                builder:
-                                                    (context, constraints) {
-                                                      return Align(
-                                                        alignment: Alignment
-                                                            .centerLeft,
-                                                        child: Container(
-                                                          width:
-                                                              constraints
-                                                                  .maxWidth *
-                                                              progress,
-                                                          color: Colors.black
-                                                              .withOpacity(
-                                                                0.25,
-                                                              ),
-                                                        ),
-                                                      );
-                                                    },
-                                              ),
-                                            ),
-
-                                          // Content
-                                          Center(
-                                            child: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                Icon(
-                                                  Icons.play_arrow_rounded,
-                                                  size: 28,
-                                                  color: Theme.of(
-                                                    context,
-                                                  ).colorScheme.onPrimary,
-                                                ),
-                                                const SizedBox(width: 8),
-                                                Text(
-                                                  label,
-                                                  style: TextStyle(
-                                                    fontSize: 18,
-                                                    fontWeight: FontWeight.bold,
-                                                    color: Theme.of(
-                                                      context,
-                                                    ).colorScheme.onPrimary,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                );
                               },
                             ),
                           ),
@@ -1662,17 +1279,13 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
     AsyncValue<List<TaskRecord>> downloadsAsync,
     AsyncValue<List<HistoryItem>> historyAsync,
   ) {
-    String? posterUrl = detail.posterUrl;
-    if (!widget.offlineMode && posterUrl != null && posterUrl.startsWith('/')) {
-      posterUrl = 'https://image.tmdb.org/t/p/w780$posterUrl';
-    }
-
-    final logoUrl = detail.logo;
-
     return Stack(
       fit: StackFit.expand,
       children: [
-        _buildBackdrop(context, detail.backdropUrl),
+        BackdropBackground(
+          backdropUrl: detail.backdropUrl,
+          offlineMode: widget.offlineMode,
+        ),
 
         Positioned.fill(
           child: Padding(
@@ -1683,41 +1296,9 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                 // Column 1: Poster (25%) - Isolated
                 Expanded(
                   flex: 3,
-                  child: AspectRatio(
-                    aspectRatio: 2 / 3,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.5),
-                            blurRadius: 20,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: posterUrl != null
-                            ? (widget.offlineMode
-                                  ? Image.file(
-                                      File(posterUrl),
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => Container(
-                                        color: Colors.grey[900],
-                                        child: const Icon(
-                                          Icons.movie,
-                                          size: 50,
-                                        ),
-                                      ),
-                                    )
-                                  : Image.network(posterUrl, fit: BoxFit.cover))
-                            : Container(
-                                color: Colors.grey[900],
-                                child: const Icon(Icons.movie, size: 50),
-                              ),
-                      ),
-                    ),
+                  child: PosterBanner(
+                    posterUrl: detail.posterUrl,
+                    offlineMode: widget.offlineMode,
                   ),
                 ),
                 const SizedBox(width: 32),
@@ -1834,34 +1415,17 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                               mainAxisAlignment: MainAxisAlignment.end,
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                if (logoUrl != null)
-                                  Padding(
-                                    padding: const EdgeInsets.only(
-                                      bottom: 24.0,
-                                    ),
-                                    child: ConstrainedBox(
-                                      constraints: const BoxConstraints(
-                                        maxHeight: 120,
-                                      ),
-                                      child: widget.offlineMode
-                                          ? Image.file(
-                                              File(logoUrl),
-                                              fit: BoxFit.contain,
-                                            )
-                                          : Image.network(
-                                              logoUrl,
-                                              fit: BoxFit.contain,
-                                            ),
-                                    ),
-                                  ),
-
                                 const SizedBox(height: 16),
                                 // Buttons Row
                                 Row(
                                   children: [
                                     // Library Button
                                     if (!widget.offlineMode)
-                                      _buildLibraryButton(context, ref),
+                                      LibraryButton(
+                                        itemId: widget.itemId,
+                                        type: widget.type ?? 'show',
+                                        offlineMode: widget.offlineMode,
+                                      ),
 
                                     // Download Button (Batch Show)
                                     if (!widget.offlineMode)
@@ -1920,12 +1484,35 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                                             ),
                                           ),
                                           onPressed: () {
-                                            // Default play logic (S1E1 or Continue)
+                                            // TODO: Implement Play logic (Resume or Start S1E1)
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              const SnackBar(
+                                                content: Text(
+                                                  'Play not implemented',
+                                                ),
+                                              ),
+                                            );
                                           },
                                         ),
                                       ),
                                     ),
                                   ],
+                                ),
+
+                                const SizedBox(height: 32),
+
+                                // Continue Watching (If available)
+                                ContinueWatchingCard(
+                                  detail: detail,
+                                  historyAsync: historyAsync,
+                                  onResume: () {
+                                    // Resume logic - likely reuse same Play logic?
+                                    // For now, placeholder or trigger a generic play.
+                                    // The card calls this callback.
+                                    // We didn't implement logic in the card.
+                                  },
                                 ),
                               ],
                             ),
@@ -1933,17 +1520,33 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                         ],
                       ),
 
-                      const SizedBox(height: 32),
-
-                      // Continue Watching (If available)
-                      _buildContinueWatching(context, detail, historyAsync),
-
-                      const SizedBox(height: 16),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [Expanded(child: const SizedBox(height: 16))],
+                      ),
 
                       // Seasons List
-                      SizedBox(
-                        height: 250, // Increased height for hover effect
-                        child: _buildSeasonList(context, detail),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 250,
+                              child: SeasonList(
+                                itemId: widget.itemId,
+                                offlineMode: widget.offlineMode,
+                                selectedSeason: _selectedSeason,
+                                showPosterPath: detail.posterUrl,
+                                onSeasonSelected: (seasonNum) {
+                                  setState(() {
+                                    _selectedSeason = seasonNum;
+                                    _viewMode = ShowViewMode.season;
+                                  });
+                                },
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -1953,438 +1556,6 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildContinueWatching(
-    BuildContext context,
-    MediaDetail detail,
-    AsyncValue<List<HistoryItem>> historyAsync,
-  ) {
-    if (!historyAsync.hasValue || historyAsync.value!.isEmpty)
-      return const SizedBox.shrink();
-
-    // Find latest history item for this show
-    final showHistory = historyAsync.value!.where((h) {
-      return (h.type == 'show' || h.type == 'tv') &&
-          (h.mediaId == detail.id ||
-              h.mediaId == detail.imdbId ||
-              h.seriesName == detail.title);
-    }).toList();
-
-    if (showHistory.isEmpty) return const SizedBox.shrink();
-
-    // Sort by lastPlayedAt descending
-    showHistory.sort((a, b) => b.lastPlayedAt.compareTo(a.lastPlayedAt));
-    final latest = showHistory.first;
-
-    // Determine what to show
-    // If watched, show next episode if available. If not watched, show current.
-    // For now, simplify: if current is unfinished, show it.
-
-    if (latest.isWatched) {
-      // TODO: Handle "Up Next" using latest.nextEpisode / nextSeason
-      // For now, don't show "Continue Watching" if last item was fully watched
-      return const SizedBox.shrink();
-    }
-
-    if (latest.positionTicks < (latest.durationTicks * 0.05)) {
-      // If barely started, maybe skip? or show "Start"? User said "continue watching".
-      // Keep it.
-    }
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(
-          context,
-        ).colorScheme.surfaceContainerHighest.withOpacity(0.5),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: Row(
-        children: [
-          // Episode Still
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: latest.backdropPath.isNotEmpty
-                ? Image.network(
-                    'https://image.tmdb.org/t/p/w300${latest.backdropPath}',
-                    height: 80,
-                    width: 140,
-                    fit: BoxFit.cover,
-                  )
-                : Container(
-                    height: 80,
-                    width: 140,
-                    color: Colors.black,
-                    child: const Center(child: Icon(Icons.play_arrow)),
-                  ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Continue Watching S${latest.seasonNumber}E${latest.episodeNumber}',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  latest.title,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                if (latest.durationTicks > 0)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
-                    child: LinearProgressIndicator(
-                      value: latest.positionTicks / latest.durationTicks,
-                      backgroundColor: Colors.white10,
-                      borderRadius: BorderRadius.circular(2),
-                      minHeight: 4,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 16),
-          IconButton.filled(
-            onPressed: () {
-              // Logic to resume playback
-              // We can reuse the play logic from buttons
-              // For now, just print or TODO
-            },
-            icon: const Icon(Icons.play_arrow_rounded),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLibraryButton(BuildContext context, WidgetRef ref) {
-    return Consumer(
-      builder: (context, ref, child) {
-        final statusAsync = ref.watch(libraryStatusProvider(widget.itemId));
-        return statusAsync.when(
-          data: (inLibrary) => Container(
-            margin: const EdgeInsets.only(right: 16),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: IconButton(
-              icon: Icon(inLibrary ? Icons.check : Icons.add),
-              tooltip: inLibrary ? 'Remove from Library' : 'Add to Library',
-              onPressed: () async {
-                try {
-                  final detail = ref
-                      .read(
-                        mediaDetailProvider(
-                          id: widget.itemId,
-                          type: widget.type!,
-                        ),
-                      )
-                      .value;
-                  final idToAdd =
-                      detail?.imdbId ??
-                      (detail?.id.isNotEmpty == true
-                          ? detail!.id
-                          : widget.itemId);
-                  final typeToAdd = detail?.type ?? widget.type;
-
-                  await ref
-                      .read(libraryStatusProvider(widget.itemId).notifier)
-                      .toggle(typeToAdd!, idOverride: idToAdd);
-
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          inLibrary
-                              ? 'Removed from Library'
-                              : 'Added to Library',
-                        ),
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Action failed: $e')),
-                    );
-                  }
-                }
-              },
-            ),
-          ),
-          loading: () => Container(
-            width: 48,
-            height: 48,
-            margin: const EdgeInsets.only(right: 16),
-            child: const Center(
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
-          error: (_, __) => const SizedBox.shrink(),
-        );
-      },
-    );
-  }
-
-  Widget _buildSeasonList(BuildContext context, MediaDetail detail) {
-    if (widget.offlineMode) return const SizedBox.shrink();
-
-    final seasonsAsync = ref.watch(showSeasonsProvider(widget.itemId));
-
-    return seasonsAsync.when(
-      data: (seasons) {
-        if (seasons.isEmpty) return const SizedBox.shrink();
-        return ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: seasons.length,
-          separatorBuilder: (_, __) => const SizedBox(width: 16),
-          itemBuilder: (context, index) {
-            final season = seasons[index];
-            return _SeasonCard(
-              season: season,
-              onTap: () {
-                setState(() {
-                  _selectedSeason = season.seasonNumber;
-                  _viewMode = ShowViewMode.season;
-                });
-              },
-            );
-          },
-        );
-      },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, __) => Center(child: Text('Error: $e')),
-    );
-  }
-} // End Class
-
-class _SeasonCard extends StatefulWidget {
-  final DiscoverySeason season;
-  final VoidCallback onTap;
-
-  const _SeasonCard({required this.season, required this.onTap});
-
-  @override
-  State<_SeasonCard> createState() => _SeasonCardState();
-}
-
-class _SeasonCardState extends State<_SeasonCard> {
-  bool _isHovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AspectRatio(
-          aspectRatio: 2 / 3,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                widget.season.posterPath != null
-                    ? Image.network(
-                        'https://image.tmdb.org/t/p/w342${widget.season.posterPath}',
-                        fit: BoxFit.cover,
-                      )
-                    : Container(
-                        color: Colors.grey[800],
-                        child: const Center(child: Icon(Icons.tv)),
-                      ),
-
-                // Sliding Gradient Box
-                AnimatedPositioned(
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.easeInOut,
-                  left: 0,
-                  right: 0,
-                  bottom: _isHovered ? 0 : -80, // Slide up from bottom
-                  height: 80,
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.bottomCenter,
-                        end: Alignment.topCenter,
-                        colors: [
-                          Colors.black.withOpacity(0.9),
-                          Colors.transparent,
-                        ],
-                        stops: const [0.6, 1.0],
-                      ),
-                    ),
-                    alignment: Alignment.bottomCenter,
-                    child: Text(
-                      widget.season.name,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EpisodeCard extends StatefulWidget {
-  final DiscoveryEpisode episode;
-  final HistoryItem? history;
-  final TaskRecord? downloadTask;
-  final VoidCallback onTap;
-  final VoidCallback onPlay;
-  final VoidCallback onDownload;
-
-  const _EpisodeCard({
-    required this.episode,
-    this.history,
-    this.downloadTask,
-    required this.onTap,
-    required this.onPlay,
-    required this.onDownload,
-  });
-
-  @override
-  State<_EpisodeCard> createState() => _EpisodeCardState();
-}
-
-class _EpisodeCardState extends State<_EpisodeCard> {
-  bool _isHovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final progress = widget.history != null && widget.history!.durationTicks > 0
-        ? widget.history!.positionTicks / widget.history!.durationTicks
-        : 0.0;
-
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: _isHovered
-                ? Theme.of(context).colorScheme.surfaceContainerHighest
-                : Theme.of(context).colorScheme.surfaceContainerLow,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              // Image
-              SizedBox(
-                width: 220,
-                child: AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Stack(
-                      alignment: Alignment.bottomLeft,
-                      children: [
-                        widget.episode.stillPath != null
-                            ? Image.network(
-                                'https://image.tmdb.org/t/p/w300${widget.episode.stillPath}',
-                                fit: BoxFit.cover,
-                                width: double.infinity,
-                              )
-                            : Container(
-                                color: Colors.black,
-                                child: const Center(child: Icon(Icons.tv)),
-                              ),
-
-                        // Progress Bar
-                        if (progress > 0)
-                          LinearProgressIndicator(
-                            value: progress,
-                            minHeight: 4,
-                            backgroundColor: Colors.white24,
-                            valueColor: AlwaysStoppedAnimation(
-                              Theme.of(context).colorScheme.primary,
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(width: 16),
-
-              // Info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${widget.episode.episodeNumber}. ${widget.episode.name}',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    if (widget.episode.airDate != null)
-                      Text(
-                        widget.episode.airDate!,
-                        style: Theme.of(
-                          context,
-                        ).textTheme.bodySmall?.copyWith(color: Colors.white60),
-                      ),
-                    const SizedBox(height: 8),
-                    Text(
-                      widget.episode.overview ?? 'No description available.',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyMedium?.copyWith(color: Colors.white70),
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(width: 16),
-
-              // Actions
-              IconButton(
-                onPressed: widget.onDownload,
-                icon: Icon(
-                  widget.downloadTask != null &&
-                          widget.downloadTask!.status == TaskStatus.complete
-                      ? Icons.check_circle
-                      : Icons.download_rounded,
-                ),
-                tooltip: 'Download',
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

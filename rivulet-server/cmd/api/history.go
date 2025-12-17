@@ -150,55 +150,7 @@ func UpdateProgress(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"status": "synced"})
 }
 
-// GET /history
-// Returns X latest items sorted by LastPlayedAt desc
-func GetHistory(c echo.Context) error {
-	userID := c.Get("user_id").(uuid.UUID)
-	profile, err := getActiveProfile(c, userID)
-	if err != nil {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "no profile found"})
-	}
-
-	// Need keys for fallback fetching
-	// No need for keys as we rely on local metadata populated by UpdateProgress
-
-	limitParam := c.QueryParam("limit")
-	limit := 20
-	if limitParam != "" {
-		if l, err := strconv.Atoi(limitParam); err == nil && l > 0 {
-			limit = l
-		}
-	}
-
-	var allProgress []models.MediaProgress
-	// Fetch more items to allow for deduplication by Series
-	dbLimit := limit * 5
-	if limit > 100 {
-		dbLimit = limit + 100
-	}
-
-	if err := db.DB.Where("profile_id = ?", profile.ID).
-		Order("last_played_at desc").
-		Limit(dbLimit).
-		Find(&allProgress).Error; err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "db error"})
-	}
-
-	// Filter unique Series/Movies
-	var progress []models.MediaProgress
-	seen := make(map[string]bool)
-	for _, p := range allProgress {
-		if len(progress) >= limit {
-			break
-		}
-		if seen[p.ImdbID] {
-			continue
-		}
-		seen[p.ImdbID] = true
-		progress = append(progress, p)
-	}
-
-	// Enrich with Media Data
+// Enrich with Media Data
 	type HistoryResult struct {
 		MediaID       string     `json:"media_id"`             // External ID (tmdb:123 or tt123)
 		EpisodeID     *uuid.UUID `json:"episode_id,omitempty"` // Deprecated but maybe useful? No, we removed it.
@@ -219,6 +171,67 @@ func GetHistory(c echo.Context) error {
 		NextSeason       *int    `json:"next_season,omitempty"`
 		NextEpisode      *int    `json:"next_episode,omitempty"`
 		NextEpisodeTitle *string `json:"next_episode_title,omitempty"`
+	}
+
+// GET /history
+// Returns X latest items sorted by LastPlayedAt desc
+func GetHistory(c echo.Context) error {
+	userID := c.Get("user_id").(uuid.UUID)
+	profile, err := getActiveProfile(c, userID)
+	if err != nil {
+		return c.JSON(http.StatusForbidden, map[string]string{"error": "no profile found"})
+	}
+
+	mediaId := c.QueryParam("external_id")
+	mediaType := c.QueryParam("type")
+
+	// Need keys for fallback fetching
+	// No need for keys as we rely on local metadata populated by UpdateProgress
+
+	limitParam := c.QueryParam("limit")
+	limit := 20
+	if limitParam != "" {
+		if l, err := strconv.Atoi(limitParam); err == nil && l > 0 {
+			limit = l
+		}
+	}
+
+	var allProgress []models.MediaProgress
+	// Fetch more items to allow for deduplication by Series
+	dbLimit := limit * 5
+	if limit > 100 {
+		dbLimit = limit + 100
+	}
+
+	if mediaId != "" && mediaType != "" {
+		if err := db.DB.Where("profile_id = ? AND imdb_id = ? AND type = ?", profile.ID, mediaId, mediaType).
+			Order("last_played_at desc").
+			Limit(dbLimit).
+			Find(&allProgress).Error; err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "db error"})
+		}
+	} else {
+		if err := db.DB.Where("profile_id = ?", profile.ID).
+			Order("last_played_at desc").
+			Limit(dbLimit).
+			Find(&allProgress).Error; err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "db error"})
+		}
+	}
+
+
+	// Filter unique Series/Movies
+	var progress []models.MediaProgress
+	seen := make(map[string]bool)
+	for _, p := range allProgress {
+		if len(progress) >= limit {
+			break
+		}
+		if seen[p.ImdbID] {
+			continue
+		}
+		seen[p.ImdbID] = true
+		progress = append(progress, p)
 	}
 
 	var results []HistoryResult
@@ -422,21 +435,7 @@ func GetMediaHistory(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "db error"})
 	}
 
-	type SimpleHistory struct {
-		MediaID          string    `json:"media_id"`
-		Title            *string   `json:"title,omitempty"`
-		SeasonNumber     int       `json:"season_number,omitempty"`
-		EpisodeNumber    int       `json:"episode_number,omitempty"`
-		PositionTicks    int64     `json:"position_ticks"`
-		DurationTicks    int64     `json:"duration_ticks"`
-		IsWatched        bool      `json:"is_watched"`
-		LastPlayedAt     time.Time `json:"last_played_at"`
-		NextSeason       *int      `json:"next_season"`
-		NextEpisode      *int      `json:"next_episode"`
-		NextEpisodeTitle *string   `json:"next_episode_title"`
-	}
-
-	var results []SimpleHistory
+	var results []HistoryResult
 
 	// Optimize: Fetch Series/Movie Once
 	var series models.Series // Reuse for getting episode titles
@@ -452,8 +451,9 @@ func GetMediaHistory(c echo.Context) error {
 	}
 
 	for _, p := range progress {
-		var s SimpleHistory
+		var s HistoryResult
 		s.MediaID = imdbID
+		s.Type = p.Type
 
 		s.PositionTicks = p.PositionTicks
 		s.DurationTicks = p.DurationTicks
@@ -479,7 +479,7 @@ func GetMediaHistory(c echo.Context) error {
 					seriesID, p.SeasonNumber, p.EpisodeNumber).
 				Select("episodes.title").
 				Scan(&ep).Error; err == nil {
-				s.Title = &ep.Title
+				s.Title = ep.Title
 			}
 
 			if p.NextSeasonNumber != nil && p.NextEpisodeNumber != nil {

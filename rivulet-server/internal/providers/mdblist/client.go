@@ -94,20 +94,25 @@ func (c *Client) GetDetails(apiKey, id, mediaType string) (*MediaDetail, error) 
 
 		// 🔧 FIX: Disambiguate TMDB IDs
 		// MDBList uses 'm=movie' or 'm=show'
-		if mediaType == "tv" || mediaType == "show" || mediaType == "series" {
+		switch mediaType {
+		case "tv", "show", "series":
 			q.Add("m", "show")
-		} else if mediaType == "movie" {
+		case "movie":
 			q.Add("m", "movie")
 		}
 	}
 
 	u.RawQuery = q.Encode()
 
+	fmt.Println(u.String())
+
 	resp, err := c.HttpClient.Get(u.String())
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
+
+	fmt.Println(resp.Body)
 
 	// Check for "valid but empty" responses (MDBList sometimes returns 200 with error/empty body)
 	var detail MediaDetail
