@@ -10,6 +10,7 @@ import 'package:rivulet/features/discovery/screens/media_detail_screen.dart';
 import 'package:rivulet/features/downloads/providers/downloads_provider.dart';
 import 'package:rivulet/features/downloads/providers/offline_providers.dart';
 import 'package:rivulet/features/downloads/services/download_service.dart';
+import 'package:rivulet/features/downloads/services/offline_history_service.dart';
 
 class DownloadsScreen extends ConsumerWidget {
   const DownloadsScreen({super.key});
@@ -26,6 +27,33 @@ class DownloadsScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Downloads'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.sync),
+            tooltip: 'Sync Offline History',
+            onPressed: () async {
+              final scaffold = ScaffoldMessenger.of(context);
+              scaffold.showSnackBar(
+                const SnackBar(
+                  content: Text('Syncing history...'),
+                  duration: Duration(seconds: 1),
+                ),
+              );
+              try {
+                final count = await ref
+                    .read(offlineHistoryServiceProvider)
+                    .syncOfflineHistory();
+                scaffold.hideCurrentSnackBar();
+                scaffold.showSnackBar(
+                  SnackBar(content: Text('Synced $count items')),
+                );
+              } catch (e) {
+                scaffold.hideCurrentSnackBar();
+                scaffold.showSnackBar(
+                  SnackBar(content: Text('Sync failed: $e')),
+                );
+              }
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.folder_open),
             tooltip: 'Open Downloads Folder',

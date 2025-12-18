@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rivulet/features/discovery/domain/discovery_models.dart';
@@ -11,14 +12,17 @@ class ContinueWatchingCard extends StatefulWidget {
     String mediaId,
     int seasonNumber,
     int episodeNumber,
+    String title,
   )
   onResume;
+  final bool offlineMode;
 
   const ContinueWatchingCard({
     super.key,
     required this.detail,
     required this.historyAsync,
     required this.onResume,
+    this.offlineMode = false,
   });
 
   @override
@@ -77,6 +81,12 @@ class _ContinueWatchingCardState extends State<ContinueWatchingCard> {
     int startTicks = latest.positionTicks;
 
     if (latest.isWatched) {
+      // We don't know the next episode in offline mode, so if the latest
+      // episode is watched, there's nothing much we can do.
+      if (widget.offlineMode) {
+        return const SizedBox.shrink();
+      }
+
       episodeTitle = latest.nextEpisodeTitle ?? 'Next Episode';
       seasonNumber = latest.nextSeason ?? seasonNumber;
       episodeNumber = latest.nextEpisode ?? (episodeNumber + 1);
@@ -99,24 +109,27 @@ class _ContinueWatchingCardState extends State<ContinueWatchingCard> {
           ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: latest.backdropPath.isNotEmpty
-                ? Image.network(
-                    'https://image.tmdb.org/t/p/w300${latest.backdropPath}', // Fixed to use episode image if avail
-                    height: 152,
-                    width: 268,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Image.network(
-                      'https://image.tmdb.org/t/p/w300${widget.detail.backdropUrl}',
-                      height: 152,
-                      width: 268,
-                      fit: BoxFit.cover,
-                    ),
-                  )
-                : Container(
-                    height: 152,
-                    width: 268,
-                    color: Colors.black,
-                    child: const Center(child: Icon(Icons.play_arrow)),
-                  ),
+                ? (widget.offlineMode
+                      ? Image.file(
+                          File(latest.backdropPath),
+                          height: 152,
+                          width: 268,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _buildPlaceholder(),
+                        )
+                      : Image.network(
+                          'https://image.tmdb.org/t/p/w300${latest.backdropPath}', // Fixed to use episode image if avail
+                          height: 152,
+                          width: 268,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Image.network(
+                            'https://image.tmdb.org/t/p/w300${widget.detail.backdropUrl}',
+                            height: 152,
+                            width: 268,
+                            fit: BoxFit.cover,
+                          ),
+                        ))
+                : _buildPlaceholder(),
           ),
           const SizedBox(height: 12),
           Row(
@@ -166,6 +179,7 @@ class _ContinueWatchingCardState extends State<ContinueWatchingCard> {
                     widget.detail.id,
                     seasonNumber,
                     episodeNumber,
+                    episodeTitle,
                   ),
                   icon: const Icon(Icons.play_arrow_rounded),
                 ),
@@ -174,6 +188,32 @@ class _ContinueWatchingCardState extends State<ContinueWatchingCard> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPlaceholder() {
+    if (widget.offlineMode &&
+        widget.detail.backdropUrl != null &&
+        widget.detail.backdropUrl!.isNotEmpty) {
+      return Image.file(
+        File(widget.detail.backdropUrl!),
+        height: 152,
+        width: 268,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Container(
+          height: 152,
+          width: 268,
+          color: Colors.black,
+          child: const Center(child: Icon(Icons.play_arrow)),
+        ),
+      );
+    }
+
+    return Container(
+      height: 152,
+      width: 268,
+      color: Colors.black,
+      child: const Center(child: Icon(Icons.play_arrow)),
     );
   }
 }

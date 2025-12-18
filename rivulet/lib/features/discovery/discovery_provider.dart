@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:rivulet/features/auth/profiles_provider.dart';
+import 'package:rivulet/features/downloads/services/file_system_service.dart';
 import 'domain/discovery_models.dart';
 import 'repository/discovery_repository.dart';
 
@@ -71,8 +73,32 @@ Future<List<HistoryItem>> mediaHistory(
   Ref ref, {
   required String externalId,
   required String type,
-}) {
-  return ref
+}) async {
+  final results = await ref
       .read(discoveryRepositoryProvider)
       .getMediaHistory(externalId, type);
+
+  if (results.isNotEmpty) {
+    // Cache to local file system for offline use
+    // Fire and forget to not block UI
+    Future(() async {
+      try {
+        final profileId = ref.read(selectedProfileProvider);
+        final fs = ref.read(fileSystemServiceProvider);
+        final dir = await fs.getMediaDirectory(
+          externalId,
+          profileId: profileId,
+        );
+        await fs.writeJson(
+          dir,
+          'history.json',
+          results.map((e) => e.toJson()).toList(),
+        );
+      } catch (e) {
+        print('Error caching history: $e');
+      }
+    });
+  }
+
+  return results;
 }

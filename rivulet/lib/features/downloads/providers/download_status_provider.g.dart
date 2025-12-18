@@ -155,7 +155,7 @@ final class ActiveDownloadProvider
   }
 }
 
-String _$activeDownloadHash() => r'd99ca7d8c191f0351e134cd3aeb61e82dedf353a';
+String _$activeDownloadHash() => r'e99f75c2f8f164135f4013c7fddb0a2f13ac704b';
 
 final class ActiveDownloadFamily extends $Family
     with

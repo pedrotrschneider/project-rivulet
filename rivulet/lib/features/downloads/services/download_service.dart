@@ -42,6 +42,7 @@ class DownloadService {
     required String? overview,
     required String? imdbId,
     required double? voteAverage,
+    required String? profileId,
   }) async {
     await _startDownload(
       mediaUuid: mediaUuid,
@@ -54,6 +55,7 @@ class DownloadService {
       overview: overview,
       imdbId: imdbId,
       voteAverage: voteAverage,
+      profileId: profileId,
     );
   }
 
@@ -77,6 +79,7 @@ class DownloadService {
     required String? episodeStillPath,
     required String? episodeTitle,
     required List<Map<String, dynamic>>? seasons, // Accept raw JSON or model
+    required String? profileId,
   }) async {
     await _startDownload(
       mediaUuid: mediaUuid,
@@ -99,6 +102,7 @@ class DownloadService {
       episodeStillPath: episodeStillPath,
       episodeTitle: episodeTitle,
       seasons: seasons,
+      profileId: profileId,
     );
   }
 
@@ -124,6 +128,7 @@ class DownloadService {
     String? episodeStillPath,
     String? episodeTitle,
     List<Map<String, dynamic>>? seasons, // Accept raw JSON or model
+    String? profileId,
   }) async {
     // 1. Determine Identity and Directory
     // User requested "tt***" folder if possible.
@@ -151,6 +156,7 @@ class DownloadService {
       episodeStillPath: episodeStillPath,
       episodeTitle: episodeTitle,
       seasons: seasons,
+      profileId: profileId,
     );
 
     // 3. Determine Video File Path
@@ -158,7 +164,10 @@ class DownloadService {
     String filename;
 
     if (type == 'movie') {
-      final movieDir = await _fs.getMediaDirectory(folderId);
+      final movieDir = await _fs.getMediaDirectory(
+        folderId,
+        profileId: profileId,
+      );
       saveDir = movieDir.path;
       filename = 'video.mp4';
     } else {
@@ -167,6 +176,7 @@ class DownloadService {
         folderId,
         seasonNumber ?? 0,
         episodeNumber ?? 0,
+        profileId: profileId,
       );
       saveDir = episodeDir.path;
       filename = 'video.mp4';
@@ -220,10 +230,14 @@ class DownloadService {
     String? episodeStillPath,
     String? episodeTitle,
     List<Map<String, dynamic>>? seasons,
+    String? profileId,
   }) async {
     // A. Media Level (Movie or Show)
     // Always write show/movie details to the root media folder
-    final mediaDir = await _fs.getMediaDirectory(folderId);
+    final mediaDir = await _fs.getMediaDirectory(
+      folderId,
+      profileId: profileId,
+    );
 
     // Write media.json
     // Use Show Title if it's an episode, else Title
@@ -268,7 +282,11 @@ class DownloadService {
     // B. Season/Episode Level (if Show)
     if (type == 'episode' || type == 'show') {
       if (seasonNumber != null && episodeNumber != null) {
-        final seasonDir = await _fs.getSeasonDirectory(folderId, seasonNumber);
+        final seasonDir = await _fs.getSeasonDirectory(
+          folderId,
+          seasonNumber,
+          profileId: profileId,
+        );
         await _fs.writeJson(seasonDir, 'season_details.json', {
           'seasonNumber': seasonNumber,
           'posterPath': seasonPosterPath, // Save season poster path
@@ -284,6 +302,7 @@ class DownloadService {
           folderId,
           seasonNumber,
           episodeNumber,
+          profileId: profileId,
         );
 
         await _fs.writeJson(episodeDir, 'details.json', {
@@ -319,7 +338,7 @@ class DownloadService {
     // Maybe not.
   }
 
-  Future<void> delete(String taskId) async {
+  Future<void> delete(String taskId, {String? profileId}) async {
     final task = await _getTaskById(taskId);
     if (task != null) {
       // 1. Cancel the task mechanism (stops download, removes from queue)
@@ -360,9 +379,9 @@ class DownloadService {
   }
 
   // Helper for Library delete
-  Future<void> deleteMedia(String folderId) async {
+  Future<void> deleteMedia(String folderId, {String? profileId}) async {
     // 1. Delete from Filesystem
-    await _fs.deleteMedia(folderId);
+    await _fs.deleteMedia(folderId, profileId: profileId);
 
     // 2. We can't easily delete records from DB as method is missing.
     // We rely on file existence check in UI to ignore ghost records.
@@ -375,8 +394,8 @@ class DownloadService {
     return task as DownloadTask?;
   }
 
-  Future<void> openDownloadsFolder() async {
-    await _fs.openDownloadsFolder();
+  Future<void> openDownloadsFolder({String? profileId}) async {
+    await _fs.openDownloadsFolder(profileId: profileId);
   }
 }
 

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'package:rivulet/features/discovery/domain/discovery_models.dart';
@@ -11,6 +12,7 @@ class EpisodeCard extends StatefulWidget {
   final int season;
   final VoidCallback onTap;
   final VoidCallback onDownload;
+  final bool offlineMode;
 
   const EpisodeCard({
     super.key,
@@ -21,6 +23,7 @@ class EpisodeCard extends StatefulWidget {
     required this.season,
     required this.onTap,
     required this.onDownload,
+    this.offlineMode = false,
   });
 
   @override
@@ -63,11 +66,23 @@ class _EpisodeCardState extends State<EpisodeCard> {
                       alignment: Alignment.bottomLeft,
                       children: [
                         widget.episode.stillPath != null
-                            ? Image.network(
-                                'https://image.tmdb.org/t/p/w300${widget.episode.stillPath}',
-                                fit: BoxFit.cover,
-                                width: double.infinity,
-                              )
+                            ? (widget.offlineMode
+                                  ? Image.file(
+                                      File(widget.episode.stillPath!),
+                                      fit: BoxFit.cover,
+                                      width: double.infinity,
+                                      errorBuilder: (_, __, ___) => Container(
+                                        color: Colors.black,
+                                        child: const Center(
+                                          child: Icon(Icons.tv),
+                                        ),
+                                      ),
+                                    )
+                                  : Image.network(
+                                      'https://image.tmdb.org/t/p/w300${widget.episode.stillPath}',
+                                      fit: BoxFit.cover,
+                                      width: double.infinity,
+                                    ))
                             : Container(
                                 color: Colors.black,
                                 child: const Center(child: Icon(Icons.tv)),
@@ -145,14 +160,15 @@ class _EpisodeCardState extends State<EpisodeCard> {
               const SizedBox(width: 16),
 
               // Actions
-              DownloadButton(
-                mediaId: widget.mediaId,
-                imdbId: widget.imdbId,
-                season: widget.season,
-                episode: widget.episode.episodeNumber,
-                tooltip: 'Download',
-                onDownload: widget.onDownload,
-              ),
+              if (!widget.offlineMode)
+                DownloadButton(
+                  mediaId: widget.mediaId,
+                  imdbId: widget.imdbId,
+                  season: widget.season,
+                  episode: widget.episode.episodeNumber,
+                  tooltip: 'Download',
+                  onDownload: widget.onDownload,
+                ),
             ],
           ),
         ),

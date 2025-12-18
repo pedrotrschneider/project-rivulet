@@ -359,4 +359,62 @@ class HistoryItem {
       isWatched: false,
     );
   }
+  Map<String, dynamic> toJson() {
+    return {
+      'media_id': mediaId,
+      'episode_id': episodeId,
+      'type': type,
+      'title': title,
+      'poster_path': posterPath,
+      'backdrop_path': backdropPath,
+      'position_ticks': positionTicks,
+      'duration_ticks': durationTicks,
+      'last_played_at': lastPlayedAt,
+      'series_name': seriesName,
+      'is_watched': isWatched,
+      'season_number': seasonNumber,
+      'episode_number': episodeNumber,
+      'next_season': nextSeason,
+      'next_episode': nextEpisode,
+      'next_episode_title': nextEpisodeTitle,
+    };
+  }
+
+  HistoryItem copyWith({
+    String? mediaId,
+    String? episodeId,
+    String? type,
+    String? title,
+    String? posterPath,
+    String? backdropPath,
+    int? positionTicks,
+    int? durationTicks,
+    String? lastPlayedAt,
+    String? seriesName,
+    bool? isWatched,
+    int? seasonNumber,
+    int? episodeNumber,
+    int? nextSeason,
+    int? nextEpisode,
+    String? nextEpisodeTitle,
+  }) {
+    return HistoryItem(
+      mediaId: mediaId ?? this.mediaId,
+      episodeId: episodeId ?? this.episodeId,
+      type: type ?? this.type,
+      title: title ?? this.title,
+      posterPath: posterPath ?? this.posterPath,
+      backdropPath: backdropPath ?? this.backdropPath,
+      positionTicks: positionTicks ?? this.positionTicks,
+      durationTicks: durationTicks ?? this.durationTicks,
+      lastPlayedAt: lastPlayedAt ?? this.lastPlayedAt,
+      seriesName: seriesName ?? this.seriesName,
+      isWatched: isWatched ?? this.isWatched,
+      seasonNumber: seasonNumber ?? this.seasonNumber,
+      episodeNumber: episodeNumber ?? this.episodeNumber,
+      nextSeason: nextSeason ?? this.nextSeason,
+      nextEpisode: nextEpisode ?? this.nextEpisode,
+      nextEpisodeTitle: nextEpisodeTitle ?? this.nextEpisodeTitle,
+    );
+  }
 }

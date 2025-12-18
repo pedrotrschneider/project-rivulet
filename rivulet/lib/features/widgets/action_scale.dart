@@ -47,10 +47,7 @@ class _ActionScaleState extends State<ActionScale>
   @override
   void dispose() {
     _focusNode.removeListener(_handleFocusChange);
-    // _focusNode.dispose();
-    if (widget.focusNode == null) {
-      _breathingController.dispose();
-    }
+    _breathingController.dispose();
     super.dispose();
   }
 

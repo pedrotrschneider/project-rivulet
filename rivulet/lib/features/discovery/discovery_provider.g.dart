@@ -456,7 +456,7 @@ final class MediaHistoryProvider
   }
 }
 
-String _$mediaHistoryHash() => r'47345b3019724883e89d1bf06dd420bb5aef6388';
+String _$mediaHistoryHash() => r'1e35dfd13a466d86d84f851520f110483e191f65';
 
 final class MediaHistoryFamily extends $Family
     with

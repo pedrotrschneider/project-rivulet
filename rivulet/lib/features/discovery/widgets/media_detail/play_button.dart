@@ -5,6 +5,8 @@ import 'package:rivulet/features/discovery/domain/discovery_models.dart';
 import 'package:rivulet/features/discovery/discovery_provider.dart';
 import 'package:rivulet/features/widgets/action_scale.dart';
 
+import 'package:rivulet/features/downloads/providers/offline_providers.dart';
+
 typedef PlayCallback = void Function(int? startPosition);
 
 class ConnectedPlayButton extends ConsumerWidget {
@@ -14,6 +16,7 @@ class ConnectedPlayButton extends ConsumerWidget {
   final int? episodeNumber;
   final PlayCallback onPressed;
   final FocusNode? focusNode;
+  final bool offlineMode;
 
   const ConnectedPlayButton({
     super.key,
@@ -23,13 +26,14 @@ class ConnectedPlayButton extends ConsumerWidget {
     this.episodeNumber,
     required this.onPressed,
     this.focusNode,
+    this.offlineMode = false,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final historyAsync = ref.watch(
-      mediaHistoryProvider(externalId: externalId, type: type),
-    );
+    final historyAsync = offlineMode
+        ? ref.watch(offlineMediaHistoryProvider(id: externalId))
+        : ref.watch(mediaHistoryProvider(externalId: externalId, type: type));
 
     double progress = 0.0;
     String label = 'Play';

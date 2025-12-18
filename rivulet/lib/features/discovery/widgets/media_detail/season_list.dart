@@ -1,8 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rivulet/features/discovery/discovery_provider.dart';
 import 'package:rivulet/features/discovery/domain/discovery_models.dart';
 import 'package:rivulet/features/widgets/action_scale.dart';
+import 'package:rivulet/features/downloads/providers/offline_providers.dart';
 
 class VerticalOverflowClipper extends CustomClipper<Rect> {
   @override
@@ -61,9 +63,10 @@ class _SeasonListState extends ConsumerState<SeasonList> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.offlineMode) return const SizedBox.shrink();
-
-    final seasonsAsync = ref.watch(showSeasonsProvider(widget.itemId));
+    // Switch provider based on mode
+    final seasonsAsync = widget.offlineMode
+        ? ref.watch(offlineAvailableSeasonsProvider(id: widget.itemId))
+        : ref.watch(showSeasonsProvider(widget.itemId));
 
     return seasonsAsync.when(
       data: (seasons) {
@@ -108,6 +111,7 @@ class _SeasonListState extends ConsumerState<SeasonList> {
                       showPosterPath: widget.showPosterPath,
                       isSelected: season.seasonNumber == widget.selectedSeason,
                       onTap: () => widget.onSeasonSelected(season.seasonNumber),
+                      offlineMode: widget.offlineMode,
                     );
                   }
 
@@ -118,6 +122,7 @@ class _SeasonListState extends ConsumerState<SeasonList> {
                     showPosterPath: widget.showPosterPath,
                     isSelected: season.seasonNumber == widget.selectedSeason,
                     onTap: () => widget.onSeasonSelected(season.seasonNumber),
+                    offlineMode: widget.offlineMode,
                   );
                 },
               ),
@@ -137,6 +142,7 @@ class SeasonCard extends StatefulWidget {
   final bool isSelected;
   final String? showPosterPath;
   final FocusNode? focusNode;
+  final bool offlineMode;
 
   const SeasonCard({
     super.key,
@@ -145,6 +151,7 @@ class SeasonCard extends StatefulWidget {
     this.isSelected = false,
     required this.showPosterPath,
     this.focusNode,
+    this.offlineMode = false,
   });
 
   @override
@@ -231,23 +238,7 @@ class _SeasonCardState extends State<SeasonCard> {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(10),
-                    child:
-                        widget.season.posterPath != null &&
-                            widget.season.posterPath != ''
-                        ? Image.network(
-                            'https://image.tmdb.org/t/p/w342${widget.season.posterPath}',
-                            fit: BoxFit.cover,
-                          )
-                        : widget.showPosterPath != null &&
-                              widget.showPosterPath != ''
-                        ? Image.network(
-                            'https://image.tmdb.org/t/p/w342${widget.showPosterPath}',
-                            fit: BoxFit.cover,
-                          )
-                        : Container(
-                            color: Colors.grey[800],
-                            child: const Center(child: Icon(Icons.tv)),
-                          ),
+                    child: _buildImage(),
                   ),
                 ),
               ),
@@ -271,6 +262,67 @@ class _SeasonCardState extends State<SeasonCard> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildImage() {
+    if (widget.offlineMode) {
+      // Offline: Try local file paths or fallbacks
+      if (widget.season.posterPath != null &&
+          widget.season.posterPath!.isNotEmpty) {
+        return Image.file(
+          File(widget.season.posterPath!),
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _buildPlaceholder(),
+        );
+      } else if (widget.showPosterPath != null &&
+          widget.showPosterPath!.isNotEmpty) {
+        // Warning: This might be a web URL even in offline mode if we aren't careful,
+        // but typically showPosterPath passed here comes from Detail which IS offline.
+        // Let's check.
+        if (widget.showPosterPath!.startsWith('http') ||
+            widget.showPosterPath!.startsWith('/')) {
+          // If it looks like a URL/Path, try distinct logic?
+          // For now, assume if offlineMode is true, paths are local.
+          // But showPosterPath might be inherited from cached detail which might have web URL?
+          // Re-reading `offlineMediaDetail` provider: it sets posterUrl to local path `p.join(dir.path, 'poster.jpg')`.
+          // So it should be fine.
+          return Image.file(
+            File(widget.showPosterPath!),
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _buildPlaceholder(),
+          );
+        }
+        return Image.file(
+          File(widget.showPosterPath!),
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _buildPlaceholder(),
+        );
+      }
+      return _buildPlaceholder();
+    } else {
+      // Online
+      if (widget.season.posterPath != null && widget.season.posterPath != '') {
+        return Image.network(
+          'https://image.tmdb.org/t/p/w342${widget.season.posterPath}',
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _buildPlaceholder(),
+        );
+      } else if (widget.showPosterPath != null && widget.showPosterPath != '') {
+        return Image.network(
+          'https://image.tmdb.org/t/p/w342${widget.showPosterPath}',
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _buildPlaceholder(),
+        );
+      }
+      return _buildPlaceholder();
+    }
+  }
+
+  Widget _buildPlaceholder() {
+    return Container(
+      color: Colors.grey[800],
+      child: const Center(child: Icon(Icons.tv)),
     );
   }
 }

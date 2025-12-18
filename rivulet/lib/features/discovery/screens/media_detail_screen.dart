@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:collection/collection.dart';
+import 'package:rivulet/features/auth/profiles_provider.dart';
 import 'package:rivulet/features/discovery/discovery_provider.dart';
 import 'dart:convert';
 import 'package:background_downloader/background_downloader.dart';
@@ -67,13 +68,15 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
       effectiveHistoryId = detailAsync.asData!.value.imdbId;
     }
 
-    final historyAsync = (effectiveHistoryId != null && !widget.offlineMode)
-        ? ref.watch(
-            mediaHistoryProvider(
-              externalId: effectiveHistoryId,
-              type: widget.type ?? 'movie',
-            ),
-          )
+    final historyAsync = (effectiveHistoryId != null)
+        ? (widget.offlineMode
+              ? ref.watch(offlineMediaHistoryProvider(id: widget.itemId))
+              : ref.watch(
+                  mediaHistoryProvider(
+                    externalId: effectiveHistoryId,
+                    type: widget.type ?? 'movie',
+                  ),
+                ))
         : const AsyncValue<List<HistoryItem>>.data([]);
 
     return PopScope(
@@ -135,8 +138,8 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
     );
   }
 
-  Future<void> _playMovie(int? startPos, String mediaId) async {
-    await _playMedia(startPos, mediaId, 'movie', null, null);
+  Future<void> _playMovie(int? startPos, String mediaId, String title) async {
+    await _playMedia(startPos, mediaId, 'movie', null, null, title);
   }
 
   Future<void> _playEpisode(
@@ -144,8 +147,16 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
     String mediaId,
     int seasonNumber,
     int episodeNumber,
+    String title,
   ) async {
-    await _playMedia(startPos, mediaId, 'show', seasonNumber, episodeNumber);
+    await _playMedia(
+      startPos,
+      mediaId,
+      'show',
+      seasonNumber,
+      episodeNumber,
+      title,
+    );
   }
 
   Future<void> _playMedia(
@@ -154,6 +165,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
     String type,
     int? seasonNumber,
     int? episodeNumber,
+    String title,
   ) async {
     final downloadedPath = await _resolveDownloadPath(
       ref,
@@ -164,12 +176,54 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
 
     if (!mounted) return;
 
+    // Offline Mode Auto-Play Logic
+    if (widget.offlineMode) {
+      if (downloadedPath != null) {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PlayerScreen(
+              url: downloadedPath,
+              externalId: mediaId,
+              title: title,
+              type: type,
+              season: seasonNumber ?? 0,
+              episode: episodeNumber ?? 0,
+              startPosition: startPos ?? 0,
+              imdbId: mediaId,
+              offlineMode: true,
+            ),
+          ),
+        );
+        // Refresh details on return to update history/progress
+        if (mounted) {
+          if (widget.offlineMode) {
+            ref.invalidate(offlineMediaDetailProvider(id: widget.itemId));
+            ref.invalidate(offlineMediaHistoryProvider(id: widget.itemId));
+          } else {
+            ref.invalidate(mediaDetailProvider(id: widget.itemId, type: type));
+            ref.invalidate(
+              mediaHistoryProvider(externalId: widget.itemId, type: type),
+            );
+          }
+        }
+        return;
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Download not found for offline playback'),
+          ),
+        );
+        return;
+      }
+    }
+
     final url = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       builder: (context) => StreamSelectionSheet(
         externalId: mediaId,
-        title: 'S${seasonNumber}E$episodeNumber',
+        title: title,
         type: type,
         season: seasonNumber,
         episode: episodeNumber,
@@ -192,6 +246,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
             episode: episodeNumber,
             startPosition: startPos ?? 0,
             imdbId: mediaId,
+            offlineMode: widget.offlineMode,
           ),
         ),
       );
@@ -199,6 +254,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
       if (mounted) {
         if (widget.offlineMode) {
           ref.invalidate(offlineMediaDetailProvider(id: widget.itemId));
+          ref.invalidate(offlineMediaHistoryProvider(id: widget.itemId));
         } else {
           ref.invalidate(mediaDetailProvider(id: widget.itemId, type: type));
           ref.invalidate(
@@ -305,6 +361,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                       .value
                       ?.map((s) => s.toJson())
                       .toList(),
+                  profileId: ref.read(selectedProfileProvider),
                 );
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -351,6 +408,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                 overview: detail.overview,
                 imdbId: detail.imdbId,
                 voteAverage: detail.rating,
+                profileId: ref.read(selectedProfileProvider),
               );
           ScaffoldMessenger.of(
             context,
@@ -408,6 +466,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                     .value
                     ?.map((s) => s.toJson())
                     .toList(),
+                profileId: ref.read(selectedProfileProvider),
               );
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('Downloading ${episode.name}')),
@@ -450,9 +509,8 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
             // Resolve absolute path
             String fullPath = p.join("/", task.directory, task.filename);
 
-            if (File(fullPath).existsSync()) {
-              return fullPath;
-            }
+            // Trust task path
+            return fullPath;
           }
         }
       }
@@ -624,8 +682,13 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                             child: ConnectedPlayButton(
                               externalId: detail.imdbId ?? detail.id,
                               type: 'movie',
+                              offlineMode: widget.offlineMode,
                               onPressed: (int? startPos) async {
-                                _playMovie(startPos, detail.imdbId!);
+                                _playMovie(
+                                  startPos,
+                                  detail.imdbId!,
+                                  detail.title,
+                                );
                               },
                             ),
                           ),
@@ -663,9 +726,19 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
     AsyncValue<List<HistoryItem>> historyAsync,
   ) {
     // 1. Fetch Episodes
-    final episodesAsync = ref.watch(
-      seasonEpisodesProvider(id: widget.itemId, seasonNum: _selectedSeason!),
-    );
+    final episodesAsync = widget.offlineMode
+        ? ref.watch(
+            offlineSeasonEpisodesProvider(
+              id: widget.itemId,
+              seasonNum: _selectedSeason!,
+            ),
+          )
+        : ref.watch(
+            seasonEpisodesProvider(
+              id: widget.itemId,
+              seasonNum: _selectedSeason!,
+            ),
+          );
 
     return episodesAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -675,16 +748,22 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
         final episodes = seasonDetail.episodes;
 
         // Find Season Poster
-        final seasonsAsync = ref.watch(showSeasonsProvider(widget.itemId));
+        final seasonsAsync = widget.offlineMode
+            ? ref.watch(offlineAvailableSeasonsProvider(id: widget.itemId))
+            : ref.watch(showSeasonsProvider(widget.itemId));
         final seasonPoster = seasonsAsync.value
             ?.where((s) => s.seasonNumber == _selectedSeason)
             .firstOrNull
             ?.posterPath;
 
         final posterUrlToUse = seasonPoster != null
-            ? 'https://image.tmdb.org/t/p/w780$seasonPoster'
+            ? (widget.offlineMode
+                  ? seasonPoster
+                  : 'https://image.tmdb.org/t/p/w780$seasonPoster')
             : (detail.posterUrl != null && detail.posterUrl!.startsWith('/')
-                  ? 'https://image.tmdb.org/t/p/w780${detail.posterUrl}'
+                  ? (widget.offlineMode
+                        ? detail.posterUrl
+                        : 'https://image.tmdb.org/t/p/w780${detail.posterUrl}')
                   : detail.posterUrl);
 
         return Stack(
@@ -830,6 +909,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                                   mediaId: detail.id,
                                   imdbId: detail.imdbId,
                                   season: _selectedSeason!,
+                                  offlineMode: widget.offlineMode,
                                   onTap: () {
                                     setState(() {
                                       _selectedEpisode = episode;
@@ -872,16 +952,22 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
     final episode = _selectedEpisode!;
 
     // Resolving Season Poster
-    final seasonsAsync = ref.watch(showSeasonsProvider(widget.itemId));
+    final seasonsAsync = widget.offlineMode
+        ? ref.watch(offlineAvailableSeasonsProvider(id: widget.itemId))
+        : ref.watch(showSeasonsProvider(widget.itemId));
     final seasonPoster = seasonsAsync.value
         ?.where((s) => s.seasonNumber == _selectedSeason)
         .firstOrNull
         ?.posterPath;
 
     final posterUrlToUse = seasonPoster != null
-        ? 'https://image.tmdb.org/t/p/w780$seasonPoster'
+        ? (widget.offlineMode
+              ? seasonPoster
+              : 'https://image.tmdb.org/t/p/w780$seasonPoster')
         : (detail.posterUrl != null && detail.posterUrl!.startsWith('/')
-              ? 'https://image.tmdb.org/t/p/w780${detail.posterUrl}'
+              ? (widget.offlineMode
+                    ? detail.posterUrl
+                    : 'https://image.tmdb.org/t/p/w780${detail.posterUrl}')
               : detail.posterUrl);
 
     return Stack(
@@ -1024,10 +1110,21 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                                 borderRadius: BorderRadius.circular(12),
                                 child: Stack(
                                   children: [
-                                    Image.network(
-                                      'https://image.tmdb.org/t/p/w780${episode.stillPath}',
-                                      fit: BoxFit.cover,
-                                    ),
+                                    widget.offlineMode
+                                        ? Image.file(
+                                            File(episode.stillPath!),
+                                            fit: BoxFit.cover,
+                                            width: double.infinity,
+                                            errorBuilder: (_, __, ___) =>
+                                                Container(
+                                                  color: Colors.grey[900],
+                                                  child: const Icon(Icons.tv),
+                                                ),
+                                          )
+                                        : Image.network(
+                                            'https://image.tmdb.org/t/p/w780${episode.stillPath}',
+                                            fit: BoxFit.cover,
+                                          ),
                                     if (historyAsync.value
                                             ?.firstWhereOrNull(
                                               (h) =>
@@ -1068,17 +1165,23 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                       // Buttons
                       Row(
                         children: [
-                          // Download Button
-                          DownloadButton(
-                            mediaId: detail.id,
-                            imdbId: detail.imdbId,
-                            season: _selectedSeason,
-                            episode: episode.episodeNumber,
-                            tooltip: 'Download Episode',
-                            onDownload: () {
-                              _showDownloadSheet(context, ref, detail, episode);
-                            },
-                          ),
+                          if (!widget.offlineMode)
+                            // Download Button
+                            DownloadButton(
+                              mediaId: detail.id,
+                              imdbId: detail.imdbId,
+                              season: _selectedSeason,
+                              episode: episode.episodeNumber,
+                              tooltip: 'Download Episode',
+                              onDownload: () {
+                                _showDownloadSheet(
+                                  context,
+                                  ref,
+                                  detail,
+                                  episode,
+                                );
+                              },
+                            ),
 
                           // Play Button with Progress Overlay
                           Expanded(
@@ -1087,12 +1190,14 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                               type: detail.type,
                               seasonNumber: _selectedSeason,
                               episodeNumber: episode.episodeNumber,
+                              offlineMode: widget.offlineMode,
                               onPressed: (int? startPos) async {
                                 _playEpisode(
                                   startPos,
                                   detail.imdbId!,
                                   _selectedSeason!,
                                   episode.episodeNumber,
+                                  episode.name,
                                 );
                               },
                             ),
@@ -1260,16 +1365,27 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                               children: [
                                 if (detail.logo != null &&
                                     detail.logo!.isNotEmpty)
-                                  Image.network(
-                                    detail.logo!.startsWith('/') ||
-                                            detail.logo!.startsWith('http')
-                                        ? (detail.logo!.startsWith('/')
-                                              ? 'https://image.tmdb.org/t/p/w500${detail.logo}'
-                                              : detail.logo!)
-                                        : 'https://image.tmdb.org/t/p/w500/${detail.logo}',
-                                    width: 300,
-                                    fit: BoxFit.contain,
-                                  ),
+                                  widget.offlineMode
+                                      ? Image.file(
+                                          File(detail.logo!),
+                                          width: 300,
+                                          fit: BoxFit.contain,
+                                          errorBuilder:
+                                              (context, error, stackTrace) =>
+                                                  const SizedBox.shrink(),
+                                        )
+                                      : Image.network(
+                                          detail.logo!.startsWith('/') ||
+                                                  detail.logo!.startsWith(
+                                                    'http',
+                                                  )
+                                              ? (detail.logo!.startsWith('/')
+                                                    ? 'https://image.tmdb.org/t/p/w500${detail.logo}'
+                                                    : detail.logo!)
+                                              : 'https://image.tmdb.org/t/p/w500/${detail.logo}',
+                                          width: 300,
+                                          fit: BoxFit.contain,
+                                        ),
                                 // Cleaned up buttons and continue watching from here
                               ],
                             ),
@@ -1298,6 +1414,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                                   detail: detail,
                                   historyAsync: historyAsync,
                                   onResume: _playEpisode,
+                                  offlineMode: widget.offlineMode,
                                 ),
                                 onSeasonSelected: (seasonNum) {
                                   setState(() {
