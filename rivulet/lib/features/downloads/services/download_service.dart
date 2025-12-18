@@ -32,8 +32,78 @@ class DownloadService {
     await FileDownloader().trackTasks();
   }
 
+  Future<void> startMovieDownload({
+    required String mediaUuid,
+    required String url,
+    required String title,
+    required String? logoPath,
+    required String? posterPath,
+    required String? backdropPath,
+    required String? overview,
+    required String? imdbId,
+    required double? voteAverage,
+  }) async {
+    await _startDownload(
+      mediaUuid: mediaUuid,
+      url: url,
+      title: title,
+      type: 'movie',
+      logoPath: logoPath,
+      posterPath: posterPath,
+      backdropPath: backdropPath,
+      overview: overview,
+      imdbId: imdbId,
+      voteAverage: voteAverage,
+    );
+  }
+
+  Future<void> startEpisodeDownload({
+    required String mediaUuid,
+    required String url,
+    required String title,
+    required String? logoPath,
+    required String? seasonPosterPath,
+    required String? posterPath,
+    required String? backdropPath,
+    required String? overview,
+    required String? imdbId,
+    required double? voteAverage,
+    required String? showTitle,
+    required int? seasonNumber,
+    required String? seasonOverview,
+    required String? seasonName,
+    required int? episodeNumber,
+    required String? episodeOverview,
+    required String? episodeStillPath,
+    required String? episodeTitle,
+    required List<Map<String, dynamic>>? seasons, // Accept raw JSON or model
+  }) async {
+    await _startDownload(
+      mediaUuid: mediaUuid,
+      url: url,
+      title: title,
+      type: 'episode',
+      seasonNumber: seasonNumber,
+      episodeNumber: episodeNumber,
+      logoPath: logoPath,
+      seasonPosterPath: seasonPosterPath,
+      posterPath: posterPath,
+      backdropPath: backdropPath,
+      overview: overview,
+      imdbId: imdbId,
+      voteAverage: voteAverage,
+      showTitle: showTitle,
+      seasonOverview: seasonOverview,
+      seasonName: seasonName,
+      episodeOverview: episodeOverview,
+      episodeStillPath: episodeStillPath,
+      episodeTitle: episodeTitle,
+      seasons: seasons,
+    );
+  }
+
   /// Starts a download.
-  Future<void> startDownload({
+  Future<void> _startDownload({
     required String mediaUuid,
     required String url,
     required String title,
@@ -47,6 +117,8 @@ class DownloadService {
     double? voteAverage,
     String? showTitle,
     int? seasonNumber,
+    String? seasonOverview,
+    String? seasonName,
     int? episodeNumber,
     String? episodeOverview,
     String? episodeStillPath,
@@ -72,6 +144,8 @@ class DownloadService {
       voteAverage: voteAverage,
       showTitle: showTitle,
       seasonNumber: seasonNumber,
+      seasonOverview: seasonOverview,
+      seasonName: seasonName,
       episodeNumber: episodeNumber,
       episodeOverview: episodeOverview,
       episodeStillPath: episodeStillPath,
@@ -139,6 +213,8 @@ class DownloadService {
     double? voteAverage,
     String? showTitle,
     int? seasonNumber,
+    String? seasonOverview,
+    String? seasonName,
     int? episodeNumber,
     String? episodeOverview,
     String? episodeStillPath,
@@ -191,14 +267,13 @@ class DownloadService {
 
     // B. Season/Episode Level (if Show)
     if (type == 'episode' || type == 'show') {
-      // Assuming type 'episode' implies it's a show structure
       if (seasonNumber != null && episodeNumber != null) {
         final seasonDir = await _fs.getSeasonDirectory(folderId, seasonNumber);
-        // Write season.json (Basic info we have)
         await _fs.writeJson(seasonDir, 'season_details.json', {
           'seasonNumber': seasonNumber,
           'posterPath': seasonPosterPath, // Save season poster path
-          // We don't have season name/overview easily unless passed.
+          'overview': seasonOverview,
+          'name': seasonName,
         });
 
         if (seasonPosterPath != null) {

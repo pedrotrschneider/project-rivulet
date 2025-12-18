@@ -211,6 +211,7 @@ class DiscoveryEpisode {
 class SeasonDetail {
   final int id;
   final String name;
+  final String? overview;
   final String? posterPath;
   final int seasonNumber;
   final List<DiscoveryEpisode> episodes;
@@ -218,6 +219,7 @@ class SeasonDetail {
   SeasonDetail({
     required this.id,
     required this.name,
+    this.overview,
     this.posterPath,
     required this.seasonNumber,
     required this.episodes,
@@ -227,6 +229,7 @@ class SeasonDetail {
     return SeasonDetail(
       id: json['id'] as int? ?? 0,
       name: json['name'] as String? ?? '',
+      overview: json['overview'] as String?,
       posterPath: json['poster_path'] as String?,
       seasonNumber: json['season_number'] as int? ?? 0,
       episodes:

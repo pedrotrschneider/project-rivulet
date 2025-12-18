@@ -1,22 +1,25 @@
 import 'package:flutter/material.dart';
-import 'package:background_downloader/background_downloader.dart';
+
 import 'package:rivulet/features/discovery/domain/discovery_models.dart';
+import 'download_button.dart';
 
 class EpisodeCard extends StatefulWidget {
   final DiscoveryEpisode episode;
   final HistoryItem? history;
-  final TaskRecord? downloadTask;
+  final String mediaId;
+  final String? imdbId;
+  final int season;
   final VoidCallback onTap;
-  final VoidCallback onPlay;
   final VoidCallback onDownload;
 
   const EpisodeCard({
     super.key,
     required this.episode,
     this.history,
-    this.downloadTask,
+    required this.mediaId,
+    this.imdbId,
+    required this.season,
     required this.onTap,
-    required this.onPlay,
     required this.onDownload,
   });
 
@@ -80,6 +83,25 @@ class _EpisodeCardState extends State<EpisodeCard> {
                               Theme.of(context).colorScheme.primary,
                             ),
                           ),
+
+                        // Watched Indicator
+                        if (widget.history?.isWatched ?? false)
+                          Positioned(
+                            top: 4,
+                            left: 4,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(0.6),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.remove_red_eye_rounded,
+                                color: Theme.of(context).colorScheme.primary,
+                                size: 20,
+                              ),
+                            ),
+                          ),
                       ],
                     ),
                   ),
@@ -123,15 +145,13 @@ class _EpisodeCardState extends State<EpisodeCard> {
               const SizedBox(width: 16),
 
               // Actions
-              IconButton(
-                onPressed: widget.onDownload,
-                icon: Icon(
-                  widget.downloadTask != null &&
-                          widget.downloadTask!.status == TaskStatus.complete
-                      ? Icons.check_circle
-                      : Icons.download_rounded,
-                ),
+              DownloadButton(
+                mediaId: widget.mediaId,
+                imdbId: widget.imdbId,
+                season: widget.season,
+                episode: widget.episode.episodeNumber,
                 tooltip: 'Download',
+                onDownload: widget.onDownload,
               ),
             ],
           ),

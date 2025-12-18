@@ -175,7 +175,7 @@ func UpdateProgress(c echo.Context) error {
 
 // GET /history
 // Returns X latest items sorted by LastPlayedAt desc
-func GetHistory(c echo.Context) error {
+func GetHistory(c echo.Context, filterSame bool) error {
 	userID := c.Get("user_id").(uuid.UUID)
 	profile, err := getActiveProfile(c, userID)
 	if err != nil {
@@ -222,16 +222,21 @@ func GetHistory(c echo.Context) error {
 
 	// Filter unique Series/Movies
 	var progress []models.MediaProgress
-	seen := make(map[string]bool)
-	for _, p := range allProgress {
-		if len(progress) >= limit {
-			break
+
+	if filterSame {
+		seen := make(map[string]bool)
+		for _, p := range allProgress {
+			if len(progress) >= limit {
+				break
+			}
+			if seen[p.ImdbID] {
+				continue
+			}
+			seen[p.ImdbID] = true
+			progress = append(progress, p)
 		}
-		if seen[p.ImdbID] {
-			continue
-		}
-		seen[p.ImdbID] = true
-		progress = append(progress, p)
+	} else {
+		progress = allProgress
 	}
 
 	var results []HistoryResult
@@ -326,6 +331,14 @@ func GetHistory(c echo.Context) error {
 	return c.JSON(http.StatusOK, results)
 }
 
+func GetProfileHistory(c echo.Context) error {
+	return GetHistory(c, true);
+}
+
+func GetMediaHistory(c echo.Context) error {
+	return GetHistory(c, false);
+}
+
 // DELETE /history/:media_id
 func DeleteHistory(c echo.Context) error {
 	userID := c.Get("user_id").(uuid.UUID)
@@ -383,122 +396,6 @@ func DeleteHistory(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]bool{"success": true})
-}
-
-func GetMediaHistory(c echo.Context) error {
-	userID := c.Get("user_id").(uuid.UUID)
-	profile, err := getActiveProfile(c, userID)
-	if err != nil {
-		return c.JSON(http.StatusForbidden, map[string]string{"error": "no profile found"})
-	}
-
-	externalID := c.QueryParam("external_id")
-	// mediaType := c.QueryParam("type")
-
-	if externalID == "" {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "missing external_id"})
-	}
-
-	imdbID := ""
-
-	// Resolve IMDb ID
-	if len(externalID) > 2 && externalID[:2] == "tt" {
-		imdbID = externalID
-	} else if len(externalID) > 5 && externalID[:5] == "tmdb:" {
-		// Resolve TMDB to IMDb
-		tmdbPart := externalID[5:]
-		var movie models.Movie
-		if err := db.DB.Where("external_ids ->> 'tmdb' = ?", tmdbPart).First(&movie).Error; err == nil {
-			if id, ok := movie.ExternalIDs["imdb"].(string); ok {
-				imdbID = id
-			}
-		} else {
-			var series models.Series
-			if err := db.DB.Where("external_ids ->> 'tmdb' = ?", tmdbPart).First(&series).Error; err == nil {
-				if id, ok := series.ExternalIDs["imdb"].(string); ok {
-					imdbID = id
-				}
-			}
-		}
-	} else {
-		// Assume UUID?
-	}
-
-	if imdbID == "" {
-		return c.JSON(http.StatusOK, []interface{}{})
-	}
-
-	var progress []models.MediaProgress
-	if err := db.DB.Where("profile_id = ? AND imdb_id = ?", profile.ID, imdbID).
-		Order("last_played_at desc").
-		Find(&progress).Error; err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "db error"})
-	}
-
-	var results []HistoryResult
-
-	// Optimize: Fetch Series/Movie Once
-	var series models.Series // Reuse for getting episode titles
-	// var movie models.Movie
-
-	var seriesID uuid.UUID
-	if len(progress) > 0 {
-		if progress[0].Type != "movie" {
-			if err := db.DB.Where("external_ids ->> 'imdb' = ?", imdbID).First(&series).Error; err == nil {
-				seriesID = series.ID
-			}
-		}
-	}
-
-	for _, p := range progress {
-		var s HistoryResult
-		s.MediaID = imdbID
-		s.Type = p.Type
-
-		s.PositionTicks = p.PositionTicks
-		s.DurationTicks = p.DurationTicks
-		s.IsWatched = p.IsWatched
-		s.LastPlayedAt = p.LastPlayedAt
-
-		s.SeasonNumber = p.SeasonNumber
-		s.EpisodeNumber = p.EpisodeNumber
-		s.NextSeason = p.NextSeasonNumber
-		s.NextEpisode = p.NextEpisodeNumber
-
-		if p.Type == "movie" {
-			// Title from movie table?
-			// We already resolved ID from it if we did the lookup.
-			// Just return simple info.
-		} else if seriesID != uuid.Nil {
-			// Resolve Titles
-			var ep models.Episode
-			// Use JOIN logic to find episode by season number and episode number without Season ID
-			if err := db.DB.Table("episodes").
-				Joins("JOIN seasons ON episodes.season_id = seasons.id").
-				Where("seasons.series_id = ? AND seasons.season_number = ? AND episodes.episode_number = ?",
-					seriesID, p.SeasonNumber, p.EpisodeNumber).
-				Select("episodes.title").
-				Scan(&ep).Error; err == nil {
-				s.Title = ep.Title
-			}
-
-			if p.NextSeasonNumber != nil && p.NextEpisodeNumber != nil {
-				var nextEp models.Episode
-				if err := db.DB.Table("episodes").
-					Joins("JOIN seasons ON episodes.season_id = seasons.id").
-					Where("seasons.series_id = ? AND seasons.season_number = ? AND episodes.episode_number = ?",
-						seriesID, *p.NextSeasonNumber, *p.NextEpisodeNumber).
-					Select("episodes.title").
-					Scan(&nextEp).Error; err == nil {
-					s.NextEpisodeTitle = &nextEp.Title
-				}
-			}
-		}
-
-		results = append(results, s)
-	}
-
-	return c.JSON(http.StatusOK, results)
 }
 
 func getImagePath(ownerID uuid.UUID, ownerType, imgType string) string {

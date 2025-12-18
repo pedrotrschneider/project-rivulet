@@ -16,11 +16,13 @@ import '../../downloads/providers/offline_providers.dart';
 import '../../player/player_screen.dart';
 import '../widgets/media_detail/backdrop_background.dart';
 import '../widgets/media_detail/poster_banner.dart';
+import 'package:rivulet/features/discovery/widgets/expandable_text.dart';
 import '../widgets/media_detail/play_button.dart';
 import '../widgets/media_detail/library_button.dart';
 import '../widgets/media_detail/season_list.dart';
 import '../widgets/media_detail/episode_card.dart';
 import '../widgets/media_detail/continue_watching_card.dart';
+import '../widgets/media_detail/download_button.dart';
 
 // Enum for Show View State
 enum ShowViewMode { main, season, episode }
@@ -46,6 +48,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
   ShowViewMode _viewMode = ShowViewMode.main;
   int? _selectedSeason; // Nullable to allow Deselect
   DiscoveryEpisode? _selectedEpisode; // For Screen 3
+  SeasonDetail? _seasonDetail;
 
   @override
   Widget build(BuildContext context) {
@@ -59,8 +62,6 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
               type: widget.type ?? 'movie', // Fix nullability
             ),
           );
-
-    final downloadsAsync = ref.watch(allDownloadsProvider);
 
     // Use IMDB ID for history lookup if available from details, otherwise start with widget ID
     // Verify strict requirements: Frontend must switch to IMDB ID.
@@ -205,20 +206,10 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
             }
 
             if (detail.type == 'movie') {
-              return _buildMovieLayout(
-                context,
-                detail,
-                downloadsAsync,
-                historyAsync,
-              );
+              return _buildMovieLayout(context, detail, historyAsync);
             } else {
               // Show Layout
-              return _buildShowLayout(
-                context,
-                detail,
-                downloadsAsync,
-                historyAsync,
-              );
+              return _buildShowLayout(context, detail, historyAsync);
             }
           },
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -240,10 +231,10 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
   Future<void> _startBulkDownload(
     List<DiscoveryEpisode> episodes,
     MediaDetail detail,
-    int seasonNum,
-    List<TaskRecord> existingDownloads,
   ) async {
+    final existingDownloads = await ref.read(allDownloadsProvider.future);
     bool cancelRemaining = false;
+    SeasonDetail seasonDetail = _seasonDetail!;
 
     for (int i = 0; i < episodes.length; i++) {
       if (cancelRemaining) break;
@@ -256,7 +247,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
         final targetId = detail.imdbId ?? detail.id;
 
         return (meta['mediaId'] == targetId || meta['mediaId'] == detail.id) &&
-            meta['season'] == seasonNum &&
+            meta['season'] == seasonDetail.seasonNumber &&
             meta['episode'] == episode.episodeNumber &&
             (record.status == TaskStatus.complete ||
                 record.status == TaskStatus.running ||
@@ -271,20 +262,20 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
         isScrollControlled: true,
         builder: (context) => StreamSelectionSheet(
           externalId: detail.imdbId ?? detail.id,
-          title: 'Downloading S${seasonNum}E${episode.episodeNumber}',
+          title:
+              'Downloading S${seasonDetail.seasonNumber}E${episode.episodeNumber}',
           type: 'show',
-          season: seasonNum,
+          season: seasonDetail.seasonNumber,
           episode: episode.episodeNumber,
           imdbId: detail.imdbId,
           onStreamSelected: (url, filename, quality) {
             ref
                 .read(downloadServiceProvider)
-                .startDownload(
+                .startEpisodeDownload(
                   mediaUuid: detail.id,
                   url: url,
                   title:
-                      'S${seasonNum}E${episode.episodeNumber} - ${episode.name}',
-                  type: 'episode',
+                      'S${seasonDetail.seasonNumber}E${episode.episodeNumber} - ${episode.name}',
                   posterPath: detail.posterUrl,
                   backdropPath: detail.backdropUrl,
                   logoPath: detail.logo,
@@ -292,12 +283,16 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                   imdbId: detail.imdbId,
                   voteAverage: detail.rating,
                   showTitle: detail.title,
-                  seasonNumber: seasonNum,
+                  seasonNumber: seasonDetail.seasonNumber,
+                  seasonName: seasonDetail.name,
+                  seasonOverview: seasonDetail.overview,
                   episodeNumber: episode.episodeNumber,
                   episodeOverview: episode.overview,
                   episodeStillPath: episode.stillPath,
                   episodeTitle: episode.name, // Pass name as title
-                  seasonPosterPath: _getSeasonPosterPath(seasonNum),
+                  seasonPosterPath: _getSeasonPosterPath(
+                    seasonDetail.seasonNumber,
+                  ),
                   seasons: ref
                       .read(showSeasonsProvider(widget.itemId))
                       .value
@@ -306,7 +301,9 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                 );
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Queued S${seasonNum}E${episode.episodeNumber}'),
+                content: Text(
+                  'Queued S${seasonDetail.seasonNumber}E${episode.episodeNumber}',
+                ),
               ),
             );
           },
@@ -327,25 +324,26 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
     MediaDetail detail,
     DiscoveryEpisode episode,
   ) {
+    SeasonDetail seasonDetail = _seasonDetail!;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder: (context) => StreamSelectionSheet(
         externalId: detail.imdbId ?? widget.itemId,
-        title: 'S${_selectedSeason}E${episode.episodeNumber} - ${episode.name}',
+        title:
+            'S${seasonDetail.seasonNumber}E${episode.episodeNumber} - ${episode.name}',
         type: 'show',
-        season: _selectedSeason,
+        season: seasonDetail.seasonNumber,
         episode: episode.episodeNumber,
         imdbId: detail.imdbId,
         onStreamSelected: (url, _, __) {
           ref
               .read(downloadServiceProvider)
-              .startDownload(
+              .startEpisodeDownload(
                 mediaUuid: detail.id,
                 url: url,
                 title:
-                    '${detail.title} - S${_selectedSeason}E${episode.episodeNumber}',
-                type: 'episode',
+                    '${detail.title} - S${seasonDetail.seasonNumber}E${episode.episodeNumber}',
                 posterPath: detail.posterUrl,
                 backdropPath: detail.backdropUrl,
                 logoPath: detail.logo,
@@ -353,12 +351,16 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                 imdbId: detail.imdbId,
                 voteAverage: detail.rating,
                 showTitle: detail.title,
-                seasonNumber: _selectedSeason,
+                seasonNumber: seasonDetail.seasonNumber,
+                seasonName: seasonDetail.name,
+                seasonOverview: seasonDetail.overview,
                 episodeNumber: episode.episodeNumber,
                 episodeOverview: episode.overview,
                 episodeStillPath: episode.stillPath,
                 episodeTitle: episode.name, // Pass name as title
-                seasonPosterPath: _getSeasonPosterPath(_selectedSeason!),
+                seasonPosterPath: _getSeasonPosterPath(
+                  seasonDetail.seasonNumber,
+                ),
                 seasons: ref
                     .read(showSeasonsProvider(widget.itemId))
                     .value
@@ -375,11 +377,11 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
 
   Future<String?> _resolveDownloadPath(
     WidgetRef ref,
-    List<TaskRecord> downloads,
     String mediaId, {
     int? season,
     int? episode,
   }) async {
+    final downloads = await ref.read(allDownloadsProvider.future);
     for (final record in downloads) {
       if (record.status == TaskStatus.complete) {
         final meta = _getTaskMetadata(record);
@@ -437,7 +439,6 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
   Widget _buildMovieLayout(
     BuildContext context,
     MediaDetail detail,
-    AsyncValue<List<TaskRecord>> downloadsAsync,
     AsyncValue<List<HistoryItem>> historyAsync,
   ) {
     final logoUrl = detail
@@ -582,18 +583,13 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
 
                           // Download Button (Square)
                           if (!widget.offlineMode)
-                            Container(
-                              margin: const EdgeInsets.only(right: 16),
-                              decoration: BoxDecoration(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.surfaceContainerHighest,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: IconButton(
-                                icon: const Icon(Icons.download_rounded),
+                            Padding(
+                              padding: const EdgeInsets.only(right: 16),
+                              child: DownloadButton(
+                                mediaId: detail.id,
+                                imdbId: detail.imdbId,
                                 tooltip: 'Download Movie',
-                                onPressed: () {
+                                onDownload: () {
                                   // Trigger logic
                                   showModalBottomSheet(
                                     context: context,
@@ -607,11 +603,10 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                                           (url, filename, quality) {
                                             ref
                                                 .read(downloadServiceProvider)
-                                                .startDownload(
+                                                .startMovieDownload(
                                                   mediaUuid: detail.id,
                                                   url: url,
                                                   title: detail.title,
-                                                  type: 'movie',
                                                   posterPath: detail.posterUrl,
                                                   backdropPath:
                                                       detail.backdropUrl,
@@ -645,7 +640,6 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                                 final downloadedPath =
                                     await _resolveDownloadPath(
                                       ref,
-                                      downloadsAsync.asData?.value ?? [],
                                       detail.imdbId ?? detail.id,
                                     );
 
@@ -724,38 +718,21 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
   Widget _buildShowLayout(
     BuildContext context,
     MediaDetail detail,
-    AsyncValue<List<TaskRecord>> downloadsAsync,
     AsyncValue<List<HistoryItem>> historyAsync,
   ) {
     switch (_viewMode) {
       case ShowViewMode.main:
-        return _buildShowMainView(
-          context,
-          detail,
-          downloadsAsync,
-          historyAsync,
-        );
+        return _buildShowMainView(context, detail, historyAsync);
       case ShowViewMode.season:
-        return _buildSeasonLayout(
-          context,
-          detail,
-          downloadsAsync,
-          historyAsync,
-        );
+        return _buildSeasonLayout(context, detail, historyAsync);
       case ShowViewMode.episode:
-        return _buildEpisodeLayout(
-          context,
-          detail,
-          downloadsAsync,
-          historyAsync,
-        );
+        return _buildEpisodeLayout(context, detail, historyAsync);
     }
   }
 
   Widget _buildSeasonLayout(
     BuildContext context,
     MediaDetail detail,
-    AsyncValue<List<TaskRecord>> downloadsAsync,
     AsyncValue<List<HistoryItem>> historyAsync,
   ) {
     // 1. Fetch Episodes
@@ -767,6 +744,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (err, stack) => Center(child: Text('Error: $err')),
       data: (seasonDetail) {
+        _seasonDetail = seasonDetail;
         final episodes = seasonDetail.episodes;
 
         // Find Season Poster
@@ -781,9 +759,6 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
             : (detail.posterUrl != null && detail.posterUrl!.startsWith('/')
                   ? 'https://image.tmdb.org/t/p/w780${detail.posterUrl}'
                   : detail.posterUrl);
-
-        // Resolve Downloads
-        final downloads = downloadsAsync.value ?? [];
 
         return Stack(
           fit: StackFit.expand,
@@ -830,12 +805,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                               FilledButton.icon(
                                 onPressed: () {
                                   // Batch Download
-                                  _startBulkDownload(
-                                    episodes,
-                                    detail,
-                                    _selectedSeason!,
-                                    downloads,
-                                  );
+                                  _startBulkDownload(episodes, detail);
                                 },
                                 icon: const Icon(Icons.download_rounded),
                                 label: const Text('Download Season'),
@@ -850,31 +820,55 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                               ),
                               const SizedBox(width: 24),
                               // Title Group
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    detail.title,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .headlineMedium
-                                        ?.copyWith(fontWeight: FontWeight.bold),
-                                  ),
-                                  Text(
-                                    'Season $_selectedSeason',
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .titleLarge
-                                        ?.copyWith(
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.secondary,
-                                        ),
-                                  ),
-                                ],
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      detail.title,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .headlineMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    Text(
+                                      'Season $_selectedSeason'
+                                      '${seasonDetail.name.isNotEmpty && seasonDetail.name != "Season $_selectedSeason" ? " - ${seasonDetail.name}" : ""}',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleLarge
+                                          ?.copyWith(
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.secondary,
+                                          ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ],
                           ),
+
+                          if (seasonDetail.overview != null &&
+                              seasonDetail.overview!.isNotEmpty) ...[
+                            const SizedBox(height: 16),
+                            ExpandableText(
+                              seasonDetail.overview!,
+                              maxLines: 3,
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
+                                  ),
+                            ),
+                          ],
 
                           const Divider(height: 32),
 
@@ -886,15 +880,6 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                                   const SizedBox(height: 16),
                               itemBuilder: (context, index) {
                                 final episode = episodes[index];
-
-                                // Find Download Task
-                                final task = downloads.firstWhereOrNull((r) {
-                                  final meta = _getTaskMetadata(r);
-                                  return (meta['mediaId'] == detail.id ||
-                                          meta['mediaId'] == detail.imdbId) &&
-                                      meta['season'] == _selectedSeason &&
-                                      meta['episode'] == episode.episodeNumber;
-                                });
 
                                 // Find History
                                 final historyItem = historyAsync.value
@@ -910,37 +895,21 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                                 return EpisodeCard(
                                   episode: episode,
                                   history: historyItem,
-                                  downloadTask: task,
+                                  mediaId: detail.id,
+                                  imdbId: detail.imdbId,
+                                  season: _selectedSeason!,
                                   onTap: () {
                                     setState(() {
                                       _selectedEpisode = episode;
                                       _viewMode = ShowViewMode.episode;
                                     });
                                   },
-                                  onPlay: () {
-                                    // Play logic
-                                  },
                                   onDownload: () {
-                                    ref
-                                        .read(downloadServiceProvider)
-                                        .startDownload(
-                                          mediaUuid: detail.id,
-                                          url: '',
-                                          title:
-                                              '${detail.title} - S${_selectedSeason}E${episode.episodeNumber}',
-                                          type: 'show',
-                                          posterPath: detail.posterUrl,
-                                          backdropPath: detail.backdropUrl,
-                                          logoPath: detail.logo,
-                                          overview: episode.overview,
-                                          imdbId: detail.imdbId,
-                                          seasonNumber: _selectedSeason,
-                                          episodeNumber: episode.episodeNumber,
-                                        );
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Download started'),
-                                      ),
+                                    _showDownloadSheet(
+                                      context,
+                                      ref,
+                                      detail,
+                                      episode,
                                     );
                                   },
                                 );
@@ -963,7 +932,6 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
   Widget _buildEpisodeLayout(
     BuildContext context,
     MediaDetail detail,
-    AsyncValue<List<TaskRecord>> downloadsAsync,
     AsyncValue<List<HistoryItem>> historyAsync,
   ) {
     if (_selectedEpisode == null) {
@@ -983,16 +951,6 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
         : (detail.posterUrl != null && detail.posterUrl!.startsWith('/')
               ? 'https://image.tmdb.org/t/p/w780${detail.posterUrl}'
               : detail.posterUrl);
-
-    // Find Download Task
-    final downloads = downloadsAsync.value ?? [];
-    final task = downloads.firstWhereOrNull((r) {
-      final meta = _getTaskMetadata(r);
-      return (meta['mediaId'] == detail.id ||
-              meta['mediaId'] == detail.imdbId) &&
-          meta['season'] == _selectedSeason &&
-          meta['episode'] == episode.episodeNumber;
-    });
 
     return Stack(
       fit: StackFit.expand,
@@ -1132,9 +1090,43 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                               ),
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(12),
-                                child: Image.network(
-                                  'https://image.tmdb.org/t/p/w780${episode.stillPath}',
-                                  fit: BoxFit.cover,
+                                child: Stack(
+                                  children: [
+                                    Image.network(
+                                      'https://image.tmdb.org/t/p/w780${episode.stillPath}',
+                                      fit: BoxFit.cover,
+                                    ),
+                                    if (historyAsync.value
+                                            ?.firstWhereOrNull(
+                                              (h) =>
+                                                  h.seasonNumber ==
+                                                      _selectedSeason &&
+                                                  h.episodeNumber ==
+                                                      episode.episodeNumber,
+                                            )
+                                            ?.isWatched ??
+                                        false)
+                                      Positioned(
+                                        top: 8,
+                                        left: 8,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withOpacity(
+                                              0.6,
+                                            ),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Icon(
+                                            Icons.remove_red_eye_rounded,
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.primary,
+                                            size: 24,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ),
                             ),
@@ -1145,38 +1137,22 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                       Row(
                         children: [
                           // Download Button
-                          Container(
-                            margin: const EdgeInsets.only(right: 16),
-                            decoration: BoxDecoration(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.surfaceContainerHighest,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: IconButton(
-                              icon: Icon(
-                                task != null &&
-                                        task.status == TaskStatus.complete
-                                    ? Icons.check_circle
-                                    : Icons.download_rounded,
-                              ),
-                              tooltip:
-                                  task != null &&
-                                      task.status == TaskStatus.complete
-                                  ? 'Downloaded'
-                                  : 'Download Episode',
-                              onPressed:
-                                  task != null &&
-                                      task.status == TaskStatus.complete
-                                  ? null
-                                  : () {
-                                      _showDownloadSheet(
-                                        context,
-                                        ref,
-                                        detail,
-                                        episode,
-                                      );
-                                    },
+                          Padding(
+                            padding: const EdgeInsets.only(right: 16),
+                            child: DownloadButton(
+                              mediaId: detail.id,
+                              imdbId: detail.imdbId,
+                              season: _selectedSeason,
+                              episode: episode.episodeNumber,
+                              tooltip: 'Download Episode',
+                              onDownload: () {
+                                _showDownloadSheet(
+                                  context,
+                                  ref,
+                                  detail,
+                                  episode,
+                                );
+                              },
                             ),
                           ),
 
@@ -1191,7 +1167,6 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                                 final downloadedPath =
                                     await _resolveDownloadPath(
                                       ref,
-                                      downloadsAsync.asData?.value ?? [],
                                       detail.imdbId ?? detail.id,
                                       season: _selectedSeason,
                                       episode: episode.episodeNumber,
@@ -1276,7 +1251,6 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
   Widget _buildShowMainView(
     BuildContext context,
     MediaDetail detail,
-    AsyncValue<List<TaskRecord>> downloadsAsync,
     AsyncValue<List<HistoryItem>> historyAsync,
   ) {
     return Stack(
