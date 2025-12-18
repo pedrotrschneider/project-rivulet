@@ -9,6 +9,7 @@ class SeasonList extends ConsumerWidget {
   final int? selectedSeason; // Used potentially for highlighting
   final ValueChanged<int> onSeasonSelected;
   final String? showPosterPath;
+  final Widget? leading;
 
   const SeasonList({
     super.key,
@@ -17,6 +18,7 @@ class SeasonList extends ConsumerWidget {
     required this.onSeasonSelected,
     this.selectedSeason,
     required this.showPosterPath,
+    this.leading,
   });
 
   @override
@@ -27,12 +29,27 @@ class SeasonList extends ConsumerWidget {
 
     return seasonsAsync.when(
       data: (seasons) {
-        if (seasons.isEmpty) return const SizedBox.shrink();
+        if (seasons.isEmpty && leading == null) return const SizedBox.shrink();
+
+        final totalCount = seasons.length + (leading != null ? 1 : 0);
+
         return ListView.separated(
           scrollDirection: Axis.horizontal,
-          itemCount: seasons.length,
+          itemCount: totalCount,
           separatorBuilder: (_, _) => const SizedBox(width: 16),
           itemBuilder: (context, index) {
+            if (leading != null) {
+              if (index == 0) return leading!;
+              // Adjust index for seasons
+              final season = seasons[index - 1];
+              return SeasonCard(
+                season: season,
+                showPosterPath: showPosterPath,
+                isSelected: season.seasonNumber == selectedSeason,
+                onTap: () => onSeasonSelected(season.seasonNumber),
+              );
+            }
+
             final season = seasons[index];
             return SeasonCard(
               season: season,
@@ -91,18 +108,18 @@ class _SeasonCardState extends State<SeasonCard> {
               borderRadius: BorderRadius.circular(12),
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(
-                10,
-              ),
+              borderRadius: BorderRadius.circular(10),
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  widget.season.posterPath != null && widget.season.posterPath != ''
+                  widget.season.posterPath != null &&
+                          widget.season.posterPath != ''
                       ? Image.network(
                           'https://image.tmdb.org/t/p/w342${widget.season.posterPath}',
                           fit: BoxFit.cover,
                         )
-                      : widget.showPosterPath != null && widget.showPosterPath != ''
+                      : widget.showPosterPath != null &&
+                            widget.showPosterPath != ''
                       ? Image.network(
                           'https://image.tmdb.org/t/p/w342${widget.showPosterPath}',
                           fit: BoxFit.cover,

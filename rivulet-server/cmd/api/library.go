@@ -128,10 +128,11 @@ func GetLibrary(c echo.Context) error {
 		var images []models.Image
 		db.DB.Where("owner_id = ?", e.MediaID).Find(&images)
 		for _, img := range images {
-			if img.Type == "poster" {
+			switch img.Type {
+			case "poster":
 				// Serve as local API URL
 				poster = "/images/" + getFileName(img.LocalPath)
-			} else if img.Type == "backdrop" {
+			case "backdrop":
 				backdrop = "/images/" + getFileName(img.LocalPath)
 			}
 		}

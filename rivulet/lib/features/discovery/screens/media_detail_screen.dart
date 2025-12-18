@@ -7,7 +7,6 @@ import 'package:background_downloader/background_downloader.dart';
 import 'package:path/path.dart' as p;
 import 'dart:io';
 
-import '../library_status_provider.dart';
 import '../widgets/stream_selection_sheet.dart';
 import '../domain/discovery_models.dart';
 import '../../downloads/services/download_service.dart';
@@ -29,7 +28,7 @@ enum ShowViewMode { main, season, episode }
 
 class MediaDetailScreen extends ConsumerStatefulWidget {
   final String itemId;
-  final String? type; // 'movie' or 'show' (optional if we resolve it later)
+  final String? type; // 'movie' or 'show'
   final bool offlineMode;
 
   const MediaDetailScreen({
@@ -44,10 +43,9 @@ class MediaDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
-  // Show State
   ShowViewMode _viewMode = ShowViewMode.main;
-  int? _selectedSeason; // Nullable to allow Deselect
-  DiscoveryEpisode? _selectedEpisode; // For Screen 3
+  int? _selectedSeason;
+  DiscoveryEpisode? _selectedEpisode;
   SeasonDetail? _seasonDetail;
 
   @override
@@ -118,83 +116,6 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
               }
             },
           ),
-          actions: [
-            if (!widget.offlineMode)
-              Consumer(
-                builder: (context, ref, child) {
-                  // We use widget.itemId (TMDB ID usually) which works for checking
-                  // because backend stores both IDs.
-                  final statusAsync = ref.watch(
-                    libraryStatusProvider(widget.itemId),
-                  );
-
-                  return statusAsync.when(
-                    data: (inLibrary) {
-                      return IconButton(
-                        icon: Icon(inLibrary ? Icons.check : Icons.add),
-                        tooltip: inLibrary
-                            ? 'Remove from Library'
-                            : 'Add to Library',
-                        onPressed: () async {
-                          // Logic to add/remove
-                          try {
-                            // Resolve type and preferred ID
-                            final detail = ref
-                                .read(
-                                  mediaDetailProvider(
-                                    id: widget.itemId,
-                                    type: widget.type!,
-                                  ),
-                                )
-                                .value;
-
-                            final idToAdd =
-                                detail?.imdbId ??
-                                (detail?.id.isNotEmpty == true
-                                    ? detail!.id
-                                    : widget.itemId);
-                            final typeToAdd = detail?.type ?? widget.type;
-
-                            await ref
-                                .read(
-                                  libraryStatusProvider(widget.itemId).notifier,
-                                )
-                                .toggle(typeToAdd!, idOverride: idToAdd);
-
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    inLibrary
-                                        ? 'Removed from Library'
-                                        : 'Added to Library',
-                                  ),
-                                ),
-                              );
-                            }
-                          } catch (e) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Action failed: $e')),
-                              );
-                            }
-                          }
-                        },
-                      );
-                    },
-                    loading: () => const Padding(
-                      padding: EdgeInsets.all(8.0),
-                      child: SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    ),
-                    error: (_, __) => const Icon(Icons.error),
-                  );
-                },
-              ),
-          ],
         ),
         body: detailAsync.when(
           data: (detail) {
@@ -219,7 +140,98 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
     );
   }
 
-  // Helper to safely parse metadata
+  Future<void> _playMovie(int? startPos, String mediaId) async {
+    await _playMedia(startPos, mediaId, 'movie', null, null);
+  }
+
+  Future<void> _playEpisode(
+    int? startPos,
+    String mediaId,
+    int seasonNumber,
+    int episodeNumber,
+  ) async {
+    await _playMedia(startPos, mediaId, 'show', seasonNumber, episodeNumber);
+  }
+
+  Future<void> _playMedia(
+    int? startPos,
+    String mediaId,
+    String type,
+    int? seasonNumber,
+    int? episodeNumber,
+  ) async {
+    final downloadedPath = await _resolveDownloadPath(
+      ref,
+      mediaId,
+      season: seasonNumber,
+      episode: episodeNumber,
+    );
+
+    if (!mounted) return;
+
+    final url = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => StreamSelectionSheet(
+        externalId: mediaId,
+        title: 'S${seasonNumber}E$episodeNumber',
+        type: type,
+        season: seasonNumber,
+        episode: episodeNumber,
+        imdbId: mediaId,
+        startPosition: startPos,
+        downloadedPath: downloadedPath,
+      ),
+    );
+
+    if (url != null && mounted) {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PlayerScreen(
+            url: url,
+            externalId: mediaId,
+            title: 'S${seasonNumber}E$episodeNumber',
+            type: type,
+            season: seasonNumber,
+            episode: episodeNumber,
+            startPosition: startPos ?? 0,
+            imdbId: mediaId,
+          ),
+        ),
+      );
+
+      if (mounted) {
+        if (widget.offlineMode) {
+          ref.invalidate(offlineMediaDetailProvider(id: widget.itemId));
+        } else {
+          ref.invalidate(mediaDetailProvider(id: widget.itemId, type: type));
+          ref.invalidate(
+            mediaHistoryProvider(externalId: widget.itemId, type: type),
+          );
+        }
+      }
+    }
+  }
+
+  String? _getSeasonPosterPath(int seasonNumber) {
+    if (widget.offlineMode) {
+      final seasonsAsync = ref.read(
+        offlineAvailableSeasonsProvider(id: widget.itemId),
+      );
+      return seasonsAsync.value
+          ?.where((s) => s.seasonNumber == seasonNumber)
+          .firstOrNull
+          ?.posterPath;
+    } else {
+      final seasonsAsync = ref.read(showSeasonsProvider(widget.itemId));
+      return seasonsAsync.value
+          ?.where((s) => s.seasonNumber == seasonNumber)
+          .firstOrNull
+          ?.posterPath;
+    }
+  }
+
   Map<String, dynamic> _getTaskMetadata(TaskRecord record) {
     try {
       return jsonDecode(record.task.metaData);
@@ -318,6 +330,41 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
     }
   }
 
+  void _movieDownloadSheet(
+    BuildContext context,
+    WidgetRef ref,
+    MediaDetail detail,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => StreamSelectionSheet(
+        externalId: detail.imdbId ?? detail.id,
+        title: detail.title,
+        type: 'movie',
+        imdbId: detail.imdbId,
+        onStreamSelected: (url, filename, quality) {
+          ref
+              .read(downloadServiceProvider)
+              .startMovieDownload(
+                mediaUuid: detail.id,
+                url: url,
+                title: detail.title,
+                posterPath: detail.posterUrl,
+                backdropPath: detail.backdropUrl,
+                logoPath: detail.logo,
+                overview: detail.overview,
+                imdbId: detail.imdbId,
+                voteAverage: detail.rating,
+              );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Download started')));
+        },
+      ),
+    );
+  }
+
   void _showDownloadSheet(
     BuildContext context,
     WidgetRef ref,
@@ -357,7 +404,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                 episodeNumber: episode.episodeNumber,
                 episodeOverview: episode.overview,
                 episodeStillPath: episode.stillPath,
-                episodeTitle: episode.name, // Pass name as title
+                episodeTitle: episode.name,
                 seasonPosterPath: _getSeasonPosterPath(
                   seasonDetail.seasonNumber,
                 ),
@@ -416,24 +463,6 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
       }
     }
     return null;
-  }
-
-  String? _getSeasonPosterPath(int seasonNumber) {
-    if (widget.offlineMode) {
-      final seasonsAsync = ref.read(
-        offlineAvailableSeasonsProvider(id: widget.itemId),
-      );
-      return seasonsAsync.value
-          ?.where((s) => s.seasonNumber == seasonNumber)
-          .firstOrNull
-          ?.posterPath;
-    } else {
-      final seasonsAsync = ref.read(showSeasonsProvider(widget.itemId));
-      return seasonsAsync.value
-          ?.where((s) => s.seasonNumber == seasonNumber)
-          .firstOrNull
-          ?.posterPath;
-    }
   }
 
   Widget _buildMovieLayout(
@@ -590,43 +619,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                                 imdbId: detail.imdbId,
                                 tooltip: 'Download Movie',
                                 onDownload: () {
-                                  // Trigger logic
-                                  showModalBottomSheet(
-                                    context: context,
-                                    isScrollControlled: true,
-                                    builder: (context) => StreamSelectionSheet(
-                                      externalId: detail.imdbId ?? detail.id,
-                                      title: detail.title,
-                                      type: 'movie',
-                                      imdbId: detail.imdbId,
-                                      onStreamSelected:
-                                          (url, filename, quality) {
-                                            ref
-                                                .read(downloadServiceProvider)
-                                                .startMovieDownload(
-                                                  mediaUuid: detail.id,
-                                                  url: url,
-                                                  title: detail.title,
-                                                  posterPath: detail.posterUrl,
-                                                  backdropPath:
-                                                      detail.backdropUrl,
-                                                  logoPath: detail.logo,
-                                                  overview: detail.overview,
-                                                  imdbId: detail.imdbId,
-                                                  voteAverage: detail.rating,
-                                                );
-                                            ScaffoldMessenger.of(
-                                              context,
-                                            ).showSnackBar(
-                                              const SnackBar(
-                                                content: Text(
-                                                  'Download started',
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                    ),
-                                  );
+                                  _movieDownloadSheet(context, ref, detail);
                                 },
                               ),
                             ),
@@ -637,68 +630,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                               externalId: detail.imdbId ?? detail.id,
                               type: 'movie',
                               onPressed: (int? startPos) async {
-                                final downloadedPath =
-                                    await _resolveDownloadPath(
-                                      ref,
-                                      detail.imdbId ?? detail.id,
-                                    );
-
-                                if (!context.mounted) return;
-
-                                final url = await showModalBottomSheet<String>(
-                                  context: context,
-                                  isScrollControlled: true,
-                                  builder: (context) => StreamSelectionSheet(
-                                    externalId: detail.imdbId ?? detail.id,
-                                    title: detail.title,
-                                    type: 'movie',
-                                    startPosition: startPos,
-                                    imdbId: detail.imdbId,
-                                    downloadedPath: downloadedPath,
-                                  ),
-                                );
-
-                                if (url != null && context.mounted) {
-                                  await Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => PlayerScreen(
-                                        url: url,
-                                        externalId: detail.imdbId ?? detail.id,
-                                        title: detail.title,
-                                        type: 'movie',
-                                        startPosition:
-                                            startPos ??
-                                            0, // calculated locally above
-                                        imdbId: detail.imdbId,
-                                      ),
-                                    ),
-                                  );
-
-                                  if (mounted) {
-                                    // Sync history and reload details on exit
-                                    if (widget.offlineMode) {
-                                      ref.invalidate(
-                                        offlineMediaDetailProvider(
-                                          id: widget.itemId,
-                                        ),
-                                      );
-                                    } else {
-                                      ref.invalidate(
-                                        mediaDetailProvider(
-                                          id: widget.itemId,
-                                          type: widget.type ?? 'movie',
-                                        ),
-                                      );
-                                      ref.invalidate(
-                                        mediaHistoryProvider(
-                                          externalId: widget.itemId,
-                                          type: 'movie',
-                                        ),
-                                      );
-                                    }
-                                  }
-                                }
+                                _playMovie(startPos, detail.imdbId!);
                               },
                             ),
                           ),
@@ -984,7 +916,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '${detail.title} • S${_selectedSeason} E${episode.episodeNumber}',
+                        '${detail.title} • S$_selectedSeason E${episode.episodeNumber}',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           color: Theme.of(context).colorScheme.secondary,
                           fontWeight: FontWeight.bold,
@@ -1137,101 +1069,31 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                       Row(
                         children: [
                           // Download Button
-                          Padding(
-                            padding: const EdgeInsets.only(right: 16),
-                            child: DownloadButton(
-                              mediaId: detail.id,
-                              imdbId: detail.imdbId,
-                              season: _selectedSeason,
-                              episode: episode.episodeNumber,
-                              tooltip: 'Download Episode',
-                              onDownload: () {
-                                _showDownloadSheet(
-                                  context,
-                                  ref,
-                                  detail,
-                                  episode,
-                                );
-                              },
-                            ),
+                          DownloadButton(
+                            mediaId: detail.id,
+                            imdbId: detail.imdbId,
+                            season: _selectedSeason,
+                            episode: episode.episodeNumber,
+                            tooltip: 'Download Episode',
+                            onDownload: () {
+                              _showDownloadSheet(context, ref, detail, episode);
+                            },
                           ),
 
                           // Play Button with Progress Overlay
                           Expanded(
                             child: ConnectedPlayButton(
-                              externalId: detail.imdbId ?? detail.id,
+                              externalId: detail.imdbId!,
                               type: detail.type,
                               seasonNumber: _selectedSeason,
                               episodeNumber: episode.episodeNumber,
                               onPressed: (int? startPos) async {
-                                final downloadedPath =
-                                    await _resolveDownloadPath(
-                                      ref,
-                                      detail.imdbId ?? detail.id,
-                                      season: _selectedSeason,
-                                      episode: episode.episodeNumber,
-                                    );
-
-                                if (!context.mounted) return;
-
-                                final url = await showModalBottomSheet<String>(
-                                  context: context,
-                                  isScrollControlled: true,
-                                  builder: (context) => StreamSelectionSheet(
-                                    externalId: detail.imdbId ?? widget.itemId,
-                                    title:
-                                        'S${_selectedSeason}E${episode.episodeNumber} - ${episode.name}',
-                                    type: detail.type,
-                                    season: _selectedSeason,
-                                    episode: episode.episodeNumber,
-                                    imdbId: detail.imdbId,
-                                    startPosition: startPos,
-                                    downloadedPath: downloadedPath,
-                                  ),
+                                _playEpisode(
+                                  startPos,
+                                  detail.imdbId!,
+                                  _selectedSeason!,
+                                  episode.episodeNumber,
                                 );
-
-                                if (url != null && context.mounted) {
-                                  await Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => PlayerScreen(
-                                        url: url,
-                                        externalId:
-                                            detail.imdbId ?? widget.itemId,
-                                        title:
-                                            'S${_selectedSeason}E${episode.episodeNumber} - ${episode.name}',
-                                        type: detail.type,
-                                        season: _selectedSeason,
-                                        episode: episode.episodeNumber,
-                                        startPosition: startPos ?? 0,
-                                        imdbId: detail.imdbId,
-                                      ),
-                                    ),
-                                  );
-
-                                  if (mounted) {
-                                    if (widget.offlineMode) {
-                                      ref.invalidate(
-                                        offlineMediaDetailProvider(
-                                          id: widget.itemId,
-                                        ),
-                                      );
-                                    } else {
-                                      ref.invalidate(
-                                        mediaDetailProvider(
-                                          id: widget.itemId,
-                                          type: detail.type,
-                                        ),
-                                      );
-                                      ref.invalidate(
-                                        mediaHistoryProvider(
-                                          externalId: widget.itemId,
-                                          type: detail.type,
-                                        ),
-                                      );
-                                    }
-                                  }
-                                }
                               },
                             ),
                           ),
@@ -1320,7 +1182,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                                       ),
                                       const SizedBox(width: 4),
                                       Text(
-                                        '${detail.rating!.toStringAsFixed(1)}',
+                                        detail.rating!.toStringAsFixed(1),
                                         style: Theme.of(
                                           context,
                                         ).textTheme.titleMedium,
@@ -1357,6 +1219,13 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                                             ),
                                       ),
                                     ),
+                                    const SizedBox(width: 16),
+                                    if (!widget.offlineMode)
+                                      LibraryButton(
+                                        itemId: widget.itemId,
+                                        type: widget.type ?? 'show',
+                                        offlineMode: widget.offlineMode,
+                                      ),
                                   ],
                                 ),
                                 const SizedBox(height: 24),
@@ -1382,112 +1251,26 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                           ),
                           const SizedBox(width: 48),
 
-                          // Actions
+                          // Actions (Logo Only now)
                           Expanded(
                             flex: 4,
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.end,
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                const SizedBox(height: 16),
-                                // Buttons Row
-                                Row(
-                                  children: [
-                                    // Library Button
-                                    if (!widget.offlineMode)
-                                      LibraryButton(
-                                        itemId: widget.itemId,
-                                        type: widget.type ?? 'show',
-                                        offlineMode: widget.offlineMode,
-                                      ),
-
-                                    // Download Button (Batch Show)
-                                    if (!widget.offlineMode)
-                                      Container(
-                                        margin: const EdgeInsets.only(
-                                          right: 16,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.surfaceContainerHighest,
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
-                                        ),
-                                        child: IconButton(
-                                          icon: const Icon(
-                                            Icons.download_rounded,
-                                          ),
-                                          tooltip: 'Download Show',
-                                          onPressed: () {
-                                            // TODO: Implement Batch Download Show
-                                            ScaffoldMessenger.of(
-                                              context,
-                                            ).showSnackBar(
-                                              const SnackBar(
-                                                content: Text(
-                                                  'Download Show not implemented yet',
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ),
-
-                                    // Play Button
-                                    Expanded(
-                                      child: SizedBox(
-                                        height: 52,
-                                        child: FilledButton.icon(
-                                          style: FilledButton.styleFrom(
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(12),
-                                            ),
-                                          ),
-                                          icon: const Icon(
-                                            Icons.play_arrow_rounded,
-                                            size: 28,
-                                          ),
-                                          label: const Text(
-                                            'Play',
-                                            style: TextStyle(
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                          onPressed: () {
-                                            // TODO: Implement Play logic (Resume or Start S1E1)
-                                            ScaffoldMessenger.of(
-                                              context,
-                                            ).showSnackBar(
-                                              const SnackBar(
-                                                content: Text(
-                                                  'Play not implemented',
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-
-                                const SizedBox(height: 32),
-
-                                // Continue Watching (If available)
-                                ContinueWatchingCard(
-                                  detail: detail,
-                                  historyAsync: historyAsync,
-                                  onResume: () {
-                                    // Resume logic - likely reuse same Play logic?
-                                    // For now, placeholder or trigger a generic play.
-                                    // The card calls this callback.
-                                    // We didn't implement logic in the card.
-                                  },
-                                ),
+                                if (detail.logo != null &&
+                                    detail.logo!.isNotEmpty)
+                                  Image.network(
+                                    detail.logo!.startsWith('/') ||
+                                            detail.logo!.startsWith('http')
+                                        ? (detail.logo!.startsWith('/')
+                                              ? 'https://image.tmdb.org/t/p/w500${detail.logo}'
+                                              : detail.logo!)
+                                        : 'https://image.tmdb.org/t/p/w500/${detail.logo}',
+                                    width: 300,
+                                    fit: BoxFit.contain,
+                                  ),
+                                // Cleaned up buttons and continue watching from here
                               ],
                             ),
                           ),
@@ -1496,10 +1279,10 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
 
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [Expanded(child: const SizedBox(height: 16))],
+                        children: [Expanded(child: const SizedBox(height: 32))],
                       ),
 
-                      // Seasons List
+                      // Seasons List (with Continue Watching)
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
@@ -1511,6 +1294,11 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                                 offlineMode: widget.offlineMode,
                                 selectedSeason: _selectedSeason,
                                 showPosterPath: detail.posterUrl,
+                                leading: ContinueWatchingCard(
+                                  detail: detail,
+                                  historyAsync: historyAsync,
+                                  onResume: _playEpisode,
+                                ),
                                 onSeasonSelected: (seasonNum) {
                                   setState(() {
                                     _selectedSeason = seasonNum;
