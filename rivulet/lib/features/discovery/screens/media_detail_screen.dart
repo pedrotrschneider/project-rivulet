@@ -5,6 +5,7 @@ import 'package:rivulet/features/discovery/discovery_provider.dart';
 import 'dart:convert';
 import 'package:background_downloader/background_downloader.dart';
 import 'package:path/path.dart' as p;
+import 'package:rivulet/features/widgets/action_scale.dart';
 import 'dart:io';
 
 import '../widgets/stream_selection_sheet.dart';
@@ -50,21 +51,15 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Use IMDB ID for history lookup if available from details, otherwise start with widget ID
-    // Verify strict requirements: Frontend must switch to IMDB ID.
     final detailAsync = widget.offlineMode
         ? ref.watch(offlineMediaDetailProvider(id: widget.itemId))
         : ref.watch(
             mediaDetailProvider(
               id: widget.itemId,
-              type: widget.type ?? 'movie', // Fix nullability
+              type: widget.type ?? 'movie',
             ),
           );
 
-    // Use IMDB ID for history lookup if available from details, otherwise start with widget ID
-    // Verify strict requirements: Frontend must switch to IMDB ID.
-    // Logic: If widget.itemId is IMDB, use it.
-    // If widget.itemId is NOT IMDB, wait for detailAsync to provide IMDB ID.
     String? effectiveHistoryId;
     if (widget.itemId.startsWith('tt')) {
       effectiveHistoryId = widget.itemId;
@@ -734,21 +729,26 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                           Row(
                             children: [
                               // Download Season Button
-                              FilledButton.icon(
-                                onPressed: () {
-                                  // Batch Download
-                                  _startBulkDownload(episodes, detail);
+                              ActionScale(
+                                builder: (context, node) {
+                                  return FilledButton.icon(
+                                    focusNode: node,
+                                    onPressed: () {
+                                      // Batch Download
+                                      _startBulkDownload(episodes, detail);
+                                    },
+                                    icon: const Icon(Icons.download_rounded),
+                                    label: const Text('Download Season'),
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: Theme.of(
+                                        context,
+                                      ).colorScheme.tertiary,
+                                      foregroundColor: Theme.of(
+                                        context,
+                                      ).colorScheme.onTertiary,
+                                    ),
+                                  );
                                 },
-                                icon: const Icon(Icons.download_rounded),
-                                label: const Text('Download Season'),
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: Theme.of(
-                                    context,
-                                  ).colorScheme.tertiary,
-                                  foregroundColor: Theme.of(
-                                    context,
-                                  ).colorScheme.onTertiary,
-                                ),
                               ),
                               const SizedBox(width: 24),
                               // Title Group

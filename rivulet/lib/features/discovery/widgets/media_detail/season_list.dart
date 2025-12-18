@@ -2,14 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rivulet/features/discovery/discovery_provider.dart';
 import 'package:rivulet/features/discovery/domain/discovery_models.dart';
+import 'package:rivulet/features/widgets/action_scale.dart';
 
-class SeasonList extends ConsumerWidget {
+class VerticalOverflowClipper extends CustomClipper<Rect> {
+  @override
+  Rect getClip(Size size) {
+    return Rect.fromLTRB(0.0, -1000.0, size.width, size.height + 1000.0);
+  }
+
+  @override
+  bool shouldReclip(covariant CustomClipper<Rect> oldClipper) => false;
+}
+
+class SeasonList extends ConsumerStatefulWidget {
   final String itemId;
   final bool offlineMode;
-  final int? selectedSeason; // Used potentially for highlighting
+  final int? selectedSeason;
   final ValueChanged<int> onSeasonSelected;
   final String? showPosterPath;
   final Widget? leading;
+  final FocusNode? focusNode;
 
   const SeasonList({
     super.key,
@@ -19,43 +31,96 @@ class SeasonList extends ConsumerWidget {
     this.selectedSeason,
     required this.showPosterPath,
     this.leading,
+    this.focusNode,
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    if (offlineMode) return const SizedBox.shrink();
+  ConsumerState<SeasonList> createState() => _SeasonListState();
+}
 
-    final seasonsAsync = ref.watch(showSeasonsProvider(itemId));
+class _SeasonListState extends ConsumerState<SeasonList> {
+  late FocusNode _internalFocusNode;
+  bool _hasRequestedInitialFocus = false;
+
+  static const double _seasonCardWidth = 140.0;
+  static const double _separatorWidth = 16.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _internalFocusNode = FocusNode();
+  }
+
+  @override
+  void dispose() {
+    // _internalFocusNode.dispose();
+    super.dispose();
+  }
+
+  FocusNode get _effectiveFocusNode => widget.focusNode ?? _internalFocusNode;
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.offlineMode) return const SizedBox.shrink();
+
+    final seasonsAsync = ref.watch(showSeasonsProvider(widget.itemId));
 
     return seasonsAsync.when(
       data: (seasons) {
-        if (seasons.isEmpty && leading == null) return const SizedBox.shrink();
+        if (seasons.isEmpty && widget.leading == null) {
+          return const SizedBox.shrink();
+        }
 
-        final totalCount = seasons.length + (leading != null ? 1 : 0);
-
-        return ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: totalCount,
-          separatorBuilder: (_, _) => const SizedBox(width: 16),
-          itemBuilder: (context, index) {
-            if (leading != null) {
-              if (index == 0) return leading!;
-              // Adjust index for seasons
-              final season = seasons[index - 1];
-              return SeasonCard(
-                season: season,
-                showPosterPath: showPosterPath,
-                isSelected: season.seasonNumber == selectedSeason,
-                onTap: () => onSeasonSelected(season.seasonNumber),
-              );
+        if (!_hasRequestedInitialFocus) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              _effectiveFocusNode.requestFocus();
+              _hasRequestedInitialFocus = true;
             }
+          });
+        }
 
-            final season = seasons[index];
-            return SeasonCard(
-              season: season,
-              showPosterPath: showPosterPath,
-              isSelected: season.seasonNumber == selectedSeason,
-              onTap: () => onSeasonSelected(season.seasonNumber),
+        final totalCount = seasons.length + (widget.leading != null ? 1 : 0);
+
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final centerPadding = (constraints.maxWidth - _seasonCardWidth) / 2;
+
+            return ClipRect(
+              clipper: VerticalOverflowClipper(),
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: totalCount,
+                separatorBuilder: (_, _) =>
+                    const SizedBox(width: _separatorWidth),
+                clipBehavior: Clip.none,
+                // 5. Apply the calculated padding
+                padding: EdgeInsets.only(
+                  right: centerPadding > 0 ? centerPadding : 0,
+                ),
+                itemBuilder: (context, index) {
+                  if (widget.leading != null) {
+                    if (index == 0) return widget.leading!;
+                    final season = seasons[index - 1];
+                    return SeasonCard(
+                      focusNode: index == 1 ? _effectiveFocusNode : null,
+                      season: season,
+                      showPosterPath: widget.showPosterPath,
+                      isSelected: season.seasonNumber == widget.selectedSeason,
+                      onTap: () => widget.onSeasonSelected(season.seasonNumber),
+                    );
+                  }
+
+                  final season = seasons[index];
+                  return SeasonCard(
+                    focusNode: index == 0 ? _effectiveFocusNode : null,
+                    season: season,
+                    showPosterPath: widget.showPosterPath,
+                    isSelected: season.seasonNumber == widget.selectedSeason,
+                    onTap: () => widget.onSeasonSelected(season.seasonNumber),
+                  );
+                },
+              ),
             );
           },
         );
@@ -71,6 +136,7 @@ class SeasonCard extends StatefulWidget {
   final VoidCallback onTap;
   final bool isSelected;
   final String? showPosterPath;
+  final FocusNode? focusNode;
 
   const SeasonCard({
     super.key,
@@ -78,6 +144,7 @@ class SeasonCard extends StatefulWidget {
     required this.onTap,
     this.isSelected = false,
     required this.showPosterPath,
+    this.focusNode,
   });
 
   @override
@@ -85,87 +152,123 @@ class SeasonCard extends StatefulWidget {
 }
 
 class _SeasonCardState extends State<SeasonCard> {
-  bool _isHovered = false;
+  // We track the node we created separately so we know if we own it
+  FocusNode? _internalNode;
+
+  // Helper to get the node we should be using right now
+  FocusNode get _effectiveNode => widget.focusNode ?? _internalNode!;
+
+  @override
+  void initState() {
+    super.initState();
+    _initNode();
+    _effectiveNode.addListener(_onFocusChange);
+  }
+
+  void _initNode() {
+    if (widget.focusNode == null) {
+      _internalNode = FocusNode();
+    }
+  }
+
+  @override
+  void didUpdateWidget(SeasonCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // If the effective node changed (e.g. recycled from index 0 to index 1)
+    if (widget.focusNode != oldWidget.focusNode) {
+      // 1. Remove listener from the OLD effective node
+      final oldEffectiveNode = oldWidget.focusNode ?? _internalNode;
+      oldEffectiveNode?.removeListener(_onFocusChange);
+
+      // 2. Add listener to the NEW effective node
+      _effectiveNode.addListener(_onFocusChange);
+    }
+  }
+
+  @override
+  void dispose() {
+    _effectiveNode.removeListener(_onFocusChange);
+    // _internalNode?.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChange() {
+    if (_effectiveNode.hasFocus && mounted) {
+      Scrollable.ensureVisible(
+        context,
+        alignment: 0.5,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
+    return ActionScale(
+      focusNode: _effectiveNode,
+      duration: const Duration(milliseconds: 200),
+      builder: (context, node) => InkWell(
+        focusNode: node,
         onTap: widget.onTap,
-        child: AspectRatio(
-          aspectRatio: 2 / 3,
-          child: Container(
-            decoration: BoxDecoration(
-              border: widget.isSelected
-                  ? Border.all(
-                      color: Theme.of(context).colorScheme.primary,
-                      width: 2,
-                    )
-                  : null,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  widget.season.posterPath != null &&
-                          widget.season.posterPath != ''
-                      ? Image.network(
-                          'https://image.tmdb.org/t/p/w342${widget.season.posterPath}',
-                          fit: BoxFit.cover,
-                        )
-                      : widget.showPosterPath != null &&
-                            widget.showPosterPath != ''
-                      ? Image.network(
-                          'https://image.tmdb.org/t/p/w342${widget.showPosterPath}',
-                          fit: BoxFit.cover,
-                        )
-                      : Container(
-                          color: Colors.grey[800],
-                          child: const Center(child: Icon(Icons.tv)),
-                        ),
-
-                  // Sliding Gradient Box
-                  AnimatedPositioned(
-                    duration: const Duration(milliseconds: 200),
-                    curve: Curves.easeInOut,
-                    left: 0,
-                    right: 0,
-                    bottom: _isHovered ? 0 : -80, // Slide up from bottom
-                    height: 80,
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.bottomCenter,
-                          end: Alignment.topCenter,
-                          colors: [
-                            Colors.black.withOpacity(0.9),
-                            Colors.transparent,
-                          ],
-                          stops: const [0.6, 1.0],
-                        ),
-                      ),
-                      alignment: Alignment.bottomCenter,
-                      child: Text(
-                        widget.season.name,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
+        borderRadius: BorderRadius.circular(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: AspectRatio(
+                aspectRatio: 2 / 3,
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: widget.isSelected
+                        ? Border.all(
+                            color: Theme.of(context).colorScheme.primary,
+                            width: 2,
+                          )
+                        : null,
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                ],
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child:
+                        widget.season.posterPath != null &&
+                            widget.season.posterPath != ''
+                        ? Image.network(
+                            'https://image.tmdb.org/t/p/w342${widget.season.posterPath}',
+                            fit: BoxFit.cover,
+                          )
+                        : widget.showPosterPath != null &&
+                              widget.showPosterPath != ''
+                        ? Image.network(
+                            'https://image.tmdb.org/t/p/w342${widget.showPosterPath}',
+                            fit: BoxFit.cover,
+                          )
+                        : Container(
+                            color: Colors.grey[800],
+                            child: const Center(child: Icon(Icons.tv)),
+                          ),
+                  ),
+                ),
               ),
             ),
-          ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: 140,
+              child: Text(
+                widget.season.name,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: widget.isSelected
+                      ? Theme.of(context).colorScheme.primary
+                      : null,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.start,
+              ),
+            ),
+          ],
         ),
       ),
     );

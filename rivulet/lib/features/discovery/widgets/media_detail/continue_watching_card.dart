@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rivulet/features/discovery/domain/discovery_models.dart';
+import 'package:rivulet/features/widgets/action_scale.dart';
 
-class ContinueWatchingCard extends StatelessWidget {
+class ContinueWatchingCard extends StatefulWidget {
   final MediaDetail detail;
   final AsyncValue<List<HistoryItem>> historyAsync;
-  final Future<void> Function(int? startPos, String mediaId, int seasonNumber, int episodeNumber) onResume;
+  final Future<void> Function(
+    int? startPos,
+    String mediaId,
+    int seasonNumber,
+    int episodeNumber,
+  )
+  onResume;
 
   const ContinueWatchingCard({
     super.key,
@@ -15,32 +22,65 @@ class ContinueWatchingCard extends StatelessWidget {
   });
 
   @override
+  State<ContinueWatchingCard> createState() => _ContinueWatchingCardState();
+}
+
+class _ContinueWatchingCardState extends State<ContinueWatchingCard> {
+  late FocusNode _playButtonNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _playButtonNode = FocusNode();
+    _playButtonNode.addListener(_onFocusChange);
+  }
+
+  @override
+  void dispose() {
+    _playButtonNode.removeListener(_onFocusChange);
+    // _playButtonNode.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChange() {
+    if (_playButtonNode.hasFocus && mounted) {
+      Scrollable.ensureVisible(
+        context,
+        alignment: 0.5,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (!historyAsync.hasValue || historyAsync.value!.isEmpty) {
+    if (!widget.historyAsync.hasValue || widget.historyAsync.value!.isEmpty) {
       return const SizedBox.shrink();
     }
 
-    // Find latest history item for this show
-    final showHistory = historyAsync.value!.where((h) {
+    final showHistory = widget.historyAsync.value!.where((h) {
       return (h.type == 'show' || h.type == 'tv') &&
-          (h.mediaId == detail.id ||
-              h.mediaId == detail.imdbId ||
-              h.seriesName == detail.title);
+          (h.mediaId == widget.detail.id ||
+              h.mediaId == widget.detail.imdbId ||
+              h.seriesName == widget.detail.title);
     }).toList();
 
     if (showHistory.isEmpty) return const SizedBox.shrink();
 
-    // Sort by lastPlayedAt descending
     showHistory.sort((a, b) => b.lastPlayedAt.compareTo(a.lastPlayedAt));
     final latest = showHistory.first;
 
     String episodeTitle = latest.title;
     int seasonNumber = latest.seasonNumber!;
     int episodeNumber = latest.episodeNumber!;
+    int startTicks = latest.positionTicks;
+
     if (latest.isWatched) {
-      episodeTitle = latest.nextEpisodeTitle!;
-      seasonNumber = latest.nextSeason!;
-      episodeNumber = latest.nextEpisode!;
+      episodeTitle = latest.nextEpisodeTitle ?? 'Next Episode';
+      seasonNumber = latest.nextSeason ?? seasonNumber;
+      episodeNumber = latest.nextEpisode ?? (episodeNumber + 1);
+      startTicks = 0;
     }
 
     return Container(
@@ -57,13 +97,19 @@ class ContinueWatchingCard extends StatelessWidget {
         children: [
           // Episode Still
           ClipRRect(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(12),
             child: latest.backdropPath.isNotEmpty
                 ? Image.network(
-                    'https://image.tmdb.org/t/p/w300${detail.backdropUrl}',
+                    'https://image.tmdb.org/t/p/w300${latest.backdropPath}', // Fixed to use episode image if avail
                     height: 152,
                     width: 268,
                     fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Image.network(
+                      'https://image.tmdb.org/t/p/w300${widget.detail.backdropUrl}',
+                      height: 152,
+                      width: 268,
+                      fit: BoxFit.cover,
+                    ),
                   )
                 : Container(
                     height: 152,
@@ -94,7 +140,7 @@ class ContinueWatchingCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if (latest.durationTicks > 0)
+                    if (latest.durationTicks > 0 && !latest.isWatched)
                       Padding(
                         padding: const EdgeInsets.only(top: 8.0),
                         child: LinearProgressIndicator(
@@ -108,9 +154,21 @@ class ContinueWatchingCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 16),
-              IconButton.filled(
-                onPressed: () async => await onResume(latest.positionTicks, detail.id, seasonNumber, episodeNumber),
-                icon: const Icon(Icons.play_arrow_rounded),
+
+              ActionScale(
+                focusNode: _playButtonNode,
+                scale: 1.1,
+                breathingIntensity: 0.2,
+                builder: (context, node) => IconButton.filled(
+                  focusNode: node,
+                  onPressed: () async => await widget.onResume(
+                    startTicks, // Corrected variable
+                    widget.detail.id,
+                    seasonNumber,
+                    episodeNumber,
+                  ),
+                  icon: const Icon(Icons.play_arrow_rounded),
+                ),
               ),
             ],
           ),

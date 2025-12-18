@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:collection/collection.dart';
 import 'package:rivulet/features/discovery/domain/discovery_models.dart';
 import 'package:rivulet/features/discovery/discovery_provider.dart';
+import 'package:rivulet/features/widgets/action_scale.dart';
 
-// 1. Change the callback signature
 typedef PlayCallback = void Function(int? startPosition);
 
 class ConnectedPlayButton extends ConsumerWidget {
@@ -12,7 +12,8 @@ class ConnectedPlayButton extends ConsumerWidget {
   final String type;
   final int? seasonNumber;
   final int? episodeNumber;
-  final PlayCallback onPressed; // 2. Use the new signature
+  final PlayCallback onPressed;
+  final FocusNode? focusNode;
 
   const ConnectedPlayButton({
     super.key,
@@ -21,6 +22,7 @@ class ConnectedPlayButton extends ConsumerWidget {
     this.seasonNumber,
     this.episodeNumber,
     required this.onPressed,
+    this.focusNode,
   });
 
   @override
@@ -31,7 +33,7 @@ class ConnectedPlayButton extends ConsumerWidget {
 
     double progress = 0.0;
     String label = 'Play';
-    int? startPos; // 3. Local variable to store calculated position
+    int? startPos;
 
     final historyList = historyAsync.value ?? [];
 
@@ -41,9 +43,11 @@ class ConnectedPlayButton extends ConsumerWidget {
       if (type == 'movie') {
         item = historyList.firstOrNull;
       } else if (seasonNumber != null && episodeNumber != null) {
-        item = historyList.firstWhereOrNull((h) =>
-            h.seasonNumber == seasonNumber &&
-            h.episodeNumber == episodeNumber);
+        item = historyList.firstWhereOrNull(
+          (h) =>
+              h.seasonNumber == seasonNumber &&
+              h.episodeNumber == episodeNumber,
+        );
       }
 
       if (item != null && !item.isWatched && item.positionTicks > 0) {
@@ -67,7 +71,7 @@ class ConnectedPlayButton extends ConsumerWidget {
     return PlayButton(
       label: label,
       progress: progress,
-      // 4. When clicked, invoke the callback with the position we found
+      focusNode: focusNode,
       onPressed: () => onPressed(startPos),
     );
   }
@@ -77,68 +81,77 @@ class PlayButton extends StatelessWidget {
   final String label;
   final double progress;
   final VoidCallback? onPressed;
+  final FocusNode? focusNode;
 
   const PlayButton({
     super.key,
     this.label = 'Play',
     this.progress = 0.0,
     required this.onPressed,
+    this.focusNode,
   });
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 52,
-      child: Material(
-        color: Theme.of(context).colorScheme.primary,
-        borderRadius: BorderRadius.circular(12),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onPressed,
-          child: Stack(
-            children: [
-              // Progress Bar (Dark Overlay)
-              if (progress > 0)
-                Positioned.fill(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      return Align(
-                        alignment: Alignment.centerLeft,
-                        child: Container(
-                          width: constraints.maxWidth * progress,
-                          color: Colors.black.withOpacity(0.25),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-
-              // Content
-              Center(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.play_arrow_rounded,
-                      size: 28,
-                      color: Theme.of(context).colorScheme.onPrimary,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.onPrimary,
+    return ActionScale(
+      focusNode: focusNode,
+      scale: 1.05,
+      builder: (context, node) {
+        return SizedBox(
+          height: 52,
+          child: Material(
+            color: Theme.of(context).colorScheme.primary,
+            borderRadius: BorderRadius.circular(12),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              focusNode: node,
+              onTap: onPressed,
+              child: Stack(
+                children: [
+                  // Progress Bar (Dark Overlay)
+                  if (progress > 0)
+                    Positioned.fill(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return Align(
+                            alignment: Alignment.centerLeft,
+                            child: Container(
+                              width: constraints.maxWidth * progress,
+                              color: Colors.black.withOpacity(0.25),
+                            ),
+                          );
+                        },
                       ),
                     ),
-                  ],
-                ),
+
+                  // Content
+                  Center(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.play_arrow_rounded,
+                          size: 28,
+                          color: Theme.of(context).colorScheme.onPrimary,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.onPrimary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

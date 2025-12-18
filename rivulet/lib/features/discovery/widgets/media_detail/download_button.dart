@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:background_downloader/background_downloader.dart';
+import 'package:rivulet/features/widgets/action_scale.dart';
 
 import '../../../downloads/providers/downloads_provider.dart';
 
@@ -37,10 +39,24 @@ class DownloadButton extends ConsumerWidget {
   Widget _buildIconButton(BuildContext context, List<TaskRecord> tasks) {
     if (tasks.isEmpty) {
       // Idle State
-      return IconButton(
-        icon: const Icon(Icons.download_rounded),
-        tooltip: tooltip ?? 'Download',
-        onPressed: onDownload,
+      return ActionScale(
+        scale: 1.1,
+        breathingIntensity: 0.15,
+        builder: (context, node) {
+          return Container(
+            margin: const EdgeInsets.only(right: 16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: IconButton(
+              focusNode: node,
+              icon: const Icon(Icons.download_rounded),
+              tooltip: tooltip ?? 'Download',
+              onPressed: onDownload,
+            ),
+          );
+        },
       );
     }
 
@@ -72,17 +88,21 @@ class DownloadButton extends ConsumerWidget {
 
     final task = tasks.first;
 
-    switch (task.status) {
-      case TaskStatus.complete:
-        return IconButton(
+    return Container(
+      margin: const EdgeInsets.only(right: 16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: switch (task.status) {
+        TaskStatus.complete => IconButton(
           icon: const Icon(Icons.check_circle, color: Colors.green),
           tooltip: 'Downloaded',
           onPressed: null, // Disabled
-        );
-      case TaskStatus.running:
-      case TaskStatus.enqueued:
-      case TaskStatus.waitingToRetry:
-        return Container(
+        ),
+        TaskStatus.running ||
+        TaskStatus.enqueued ||
+        TaskStatus.waitingToRetry => Container(
           width: 40,
           height: 40,
           padding: const EdgeInsets.all(8),
@@ -93,26 +113,24 @@ class DownloadButton extends ConsumerWidget {
             strokeWidth: 3,
             backgroundColor: Theme.of(context).colorScheme.surfaceContainer,
           ),
-        );
-      case TaskStatus.paused:
-        return IconButton(
+        ),
+        TaskStatus.paused => IconButton(
           icon: const Icon(Icons.pause_circle_filled),
           tooltip: 'Paused',
           onPressed: () {
             // Could verify pause/resume implementation
             // For now just show state
           },
-        );
-      case TaskStatus.failed:
-      case TaskStatus.canceled:
-      case TaskStatus.notFound:
-        // Retryable
-        return IconButton(
+        ),
+        TaskStatus.failed ||
+        TaskStatus.canceled ||
+        TaskStatus.notFound => IconButton(
           icon: const Icon(Icons.download_rounded, color: Colors.red),
           tooltip: 'Retry Download',
           onPressed: onDownload,
-        );
-    }
+        ),
+      },
+    );
   }
 
   @override
@@ -139,14 +157,7 @@ class DownloadButton extends ConsumerWidget {
           }
         }).toList();
 
-        return Container(
-          margin: const EdgeInsets.only(right: 16),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: _buildIconButton(context, matchingTasks),
-        );
+        return _buildIconButton(context, matchingTasks);
       },
       loading: () => const SizedBox(
         width: 40,
