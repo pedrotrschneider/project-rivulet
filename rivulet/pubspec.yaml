@@ -39,7 +39,7 @@ dependencies:
   dio: ^5.7.0
   fvp: ^0.35.0
   video_player: ^2.10.0
-  flutter_secure_storage: ^4.2.1
+  flutter_secure_storage: ^9.0.0
   shared_preferences: ^2.5.4
   riverpod_annotation: ^3.0.3
   chewie: ^1.13.0

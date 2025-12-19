@@ -24,67 +24,70 @@ class LibraryScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: libraryAsync.when(
-        data: (items) {
-          if (items.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.movie_filter_outlined,
-                    size: 64,
-                    color: Colors.grey.shade600,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Your library is empty',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: Colors.grey.shade400,
+      body: SafeArea(
+        top: false,
+        child: libraryAsync.when(
+          data: (items) {
+            if (items.isEmpty) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.movie_filter_outlined,
+                      size: 64,
+                      color: Colors.grey.shade600,
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Add movies and shows from the Discover tab',
-                    style: TextStyle(color: Colors.grey.shade600),
-                  ),
-                ],
-              ),
-            );
-          }
+                    const SizedBox(height: 16),
+                    Text(
+                      'Your library is empty',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        color: Colors.grey.shade400,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Add movies and shows from the Discover tab',
+                      style: TextStyle(color: Colors.grey.shade600),
+                    ),
+                  ],
+                ),
+              );
+            }
 
-          return GridView.builder(
-            padding: const EdgeInsets.all(16),
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 150,
-              childAspectRatio: 2 / 3,
-              mainAxisSpacing: 16,
-              crossAxisSpacing: 16,
+            return GridView.builder(
+              padding: const EdgeInsets.all(16),
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 150,
+                childAspectRatio: 2 / 3,
+                mainAxisSpacing: 16,
+                crossAxisSpacing: 16,
+              ),
+              itemCount: items.length,
+              itemBuilder: (context, index) {
+                final item = items[index];
+                return _LibraryItemCard(item: item, serverUrl: serverUrl);
+              },
+            );
+          },
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (err, stack) => Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
+                const SizedBox(height: 16),
+                Text(
+                  'Failed to load library',
+                  style: TextStyle(color: Colors.red.shade300),
+                ),
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: () => ref.read(libraryProvider.notifier).refresh(),
+                  child: const Text('Retry'),
+                ),
+              ],
             ),
-            itemCount: items.length,
-            itemBuilder: (context, index) {
-              final item = items[index];
-              return _LibraryItemCard(item: item, serverUrl: serverUrl);
-            },
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline, size: 48, color: Colors.red.shade300),
-              const SizedBox(height: 16),
-              Text(
-                'Failed to load library',
-                style: TextStyle(color: Colors.red.shade300),
-              ),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: () => ref.read(libraryProvider.notifier).refresh(),
-                child: const Text('Retry'),
-              ),
-            ],
           ),
         ),
       ),
