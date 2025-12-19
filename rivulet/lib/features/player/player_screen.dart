@@ -8,6 +8,7 @@ import 'package:rivulet/features/discovery/repository/discovery_repository.dart'
 import 'package:rivulet/features/discovery/discovery_provider.dart';
 import 'package:rivulet/features/downloads/services/offline_history_service.dart';
 import 'package:rivulet/features/downloads/providers/offline_providers.dart';
+import 'package:rivulet/features/auth/auth_repository.dart';
 
 class PlayerScreen extends ConsumerStatefulWidget {
   final String url;
@@ -60,11 +61,29 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
         fvp.registerWith(
           options: {
             'global': {'log': 'off'},
+            // Fix for "colors are off" and "audio is delayed" on some Android devices
+            // forcing software decoding prevents broken hardware decoders from being used.
+            'player': {
+              'mediacodec': '0',
+              'videotoolbox': '0', // iOS equivalent, just in case
+              'hwdec': 'no',
+              'low-latency': '0',
+              'packet-buffering': '1',
+            },
           },
         );
       } catch (_) {}
 
-      _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url));
+      // Get auth token for protected streams
+      final token = await ref.read(authRepositoryProvider).getToken();
+      final headers = token != null
+          ? {'Authorization': 'Bearer $token'}
+          : <String, String>{};
+
+      _controller = VideoPlayerController.networkUrl(
+        Uri.parse(widget.url),
+        httpHeaders: headers,
+      );
       await _controller.initialize();
 
       // Resume logic
