@@ -55,84 +55,88 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: Container(
-          constraints: const BoxConstraints(maxWidth: 400),
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                _showOtp ? 'Verification Code' : 'Welcome Back',
-                style: Theme.of(context).textTheme.headlineMedium,
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 32),
-              if (!_showOtp) ...[
-                TextField(
-                  controller: _emailController,
-                  decoration: const InputDecoration(
-                    labelText: 'Email',
-                    border: OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.emailAddress,
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _passwordController,
-                  decoration: const InputDecoration(
-                    labelText: 'Password',
-                    border: OutlineInputBorder(),
-                  ),
-                  obscureText: true,
-                  onSubmitted: (_) => _submit(),
-                ),
-              ] else ...[
-                TextField(
-                  controller: _otpController,
-                  decoration: const InputDecoration(
-                    labelText: 'Code from Email',
-                    border: OutlineInputBorder(),
-                    helperText: 'Check your inbox for a 6-digit code',
-                  ),
-                  keyboardType: TextInputType.number,
-                  onSubmitted: (_) => _submit(),
-                  autofocus: true,
-                ),
-              ],
-              if (_error != null) ...[
-                const SizedBox(height: 16),
+      body: SafeArea(
+        child: Center(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 400),
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
                 Text(
-                  _error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  _showOtp ? 'Verification Code' : 'Welcome Back',
+                  style: Theme.of(context).textTheme.headlineMedium,
                   textAlign: TextAlign.center,
                 ),
+                const SizedBox(height: 32),
+                if (!_showOtp) ...[
+                  TextField(
+                    controller: _emailController,
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.emailAddress,
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _passwordController,
+                    decoration: const InputDecoration(
+                      labelText: 'Password',
+                      border: OutlineInputBorder(),
+                    ),
+                    obscureText: true,
+                    onSubmitted: (_) => _submit(),
+                  ),
+                ] else ...[
+                  TextField(
+                    controller: _otpController,
+                    decoration: const InputDecoration(
+                      labelText: 'Code from Email',
+                      border: OutlineInputBorder(),
+                      helperText: 'Check your inbox for a 6-digit code',
+                    ),
+                    keyboardType: TextInputType.number,
+                    onSubmitted: (_) => _submit(),
+                    autofocus: true,
+                  ),
+                ],
+                if (_error != null) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    _error!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+                const SizedBox(height: 24),
+                FilledButton(
+                  onPressed: _isLoading ? null : _submit,
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(_showOtp ? 'Verify' : 'Login'),
+                ),
+                if (_showOtp)
+                  TextButton(
+                    onPressed: () => setState(() => _showOtp = false),
+                    child: const Text('Back to Login'),
+                  ),
+                if (!_showOtp)
+                  TextButton(
+                    onPressed: () {
+                      ref.read(serverUrlProvider.notifier).clear();
+                    },
+                    child: const Text('Change Server'),
+                  ),
               ],
-              const SizedBox(height: 24),
-              FilledButton(
-                onPressed: _isLoading ? null : _submit,
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Text(_showOtp ? 'Verify' : 'Login'),
-              ),
-              if (_showOtp)
-                TextButton(
-                  onPressed: () => setState(() => _showOtp = false),
-                  child: const Text('Back to Login'),
-                ),
-              if (!_showOtp)
-                TextButton(
-                  onPressed: () {
-                    ref.read(serverUrlProvider.notifier).clear();
-                  },
-                  child: const Text('Change Server'),
-                ),
-            ],
+            ),
           ),
         ),
       ),

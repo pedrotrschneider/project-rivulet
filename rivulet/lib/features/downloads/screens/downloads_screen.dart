@@ -63,102 +63,106 @@ class DownloadsScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: CustomScrollView(
-        slivers: [
-          // 1. Active Downloads Section
-          allDownloadsAsync.when(
-            data: (records) {
-              // Filter tasks that are NOT finished?
-              // FileDownloader().allTasks() returns tasks in DB.
-              // Depending on config, completed tasks might stay.
-              // User said: "when the download ends it shoudl be removed from that list".
-              // StartDownload sets updates to StatusAndProgress.
-              // We should filter active.
-              final active = records
-                  .where(
-                    (r) =>
-                        r.status == TaskStatus.running ||
-                        r.status == TaskStatus.enqueued ||
-                        r.status == TaskStatus.paused ||
-                        r.status == TaskStatus.failed,
-                  )
-                  .toList();
+      body: SafeArea(
+        top: false,
+        child: CustomScrollView(
+          slivers: [
+            // 1. Active Downloads Section
+            allDownloadsAsync.when(
+              data: (records) {
+                // Filter tasks that are NOT finished?
+                // FileDownloader().allTasks() returns tasks in DB.
+                // Depending on config, completed tasks might stay.
+                // User said: "when the download ends it shoudl be removed from that list".
+                // StartDownload sets updates to StatusAndProgress.
+                // We should filter active.
+                final active = records
+                    .where(
+                      (r) =>
+                          r.status == TaskStatus.running ||
+                          r.status == TaskStatus.enqueued ||
+                          r.status == TaskStatus.paused ||
+                          r.status == TaskStatus.failed,
+                    )
+                    .toList();
 
-              if (active.isEmpty)
-                return const SliverToBoxAdapter(child: SizedBox.shrink());
+                if (active.isEmpty)
+                  return const SliverToBoxAdapter(child: SizedBox.shrink());
 
-              return SliverList(
-                delegate: SliverChildBuilderDelegate((context, index) {
-                  if (index == 0) {
-                    return const Padding(
-                      padding: EdgeInsets.all(16.0),
-                      child: Text(
-                        'Active Downloads',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                return SliverList(
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    if (index == 0) {
+                      return const Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: Text(
+                          'Active Downloads',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ),
-                    );
-                  }
-                  return _DownloadTaskTile(record: active[index - 1]);
-                }, childCount: active.length + 1),
-              );
-            },
-            error: (_, __) =>
-                const SliverToBoxAdapter(child: SizedBox.shrink()),
-            loading: () =>
-                const SliverToBoxAdapter(child: LinearProgressIndicator()),
-          ),
+                      );
+                    }
+                    return _DownloadTaskTile(record: active[index - 1]);
+                  }, childCount: active.length + 1),
+                );
+              },
+              error: (_, __) =>
+                  const SliverToBoxAdapter(child: SizedBox.shrink()),
+              loading: () =>
+                  const SliverToBoxAdapter(child: LinearProgressIndicator()),
+            ),
 
-          // 2. Library Section header
-          const SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
-              child: Text(
-                'Library',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            // 2. Library Section header
+            const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
+                child: Text(
+                  'Library',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
               ),
             ),
-          ),
 
-          // 3. Library Grid
-          libraryContentAsync.when(
-            data: (content) {
-              if (content.isEmpty) {
-                return const SliverToBoxAdapter(
-                  child: Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(32.0),
-                      child: Text('No downloaded content'),
+            // 3. Library Grid
+            libraryContentAsync.when(
+              data: (content) {
+                if (content.isEmpty) {
+                  return const SliverToBoxAdapter(
+                    child: Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(32.0),
+                        child: Text('No downloaded content'),
+                      ),
                     ),
+                  );
+                }
+
+                return SliverPadding(
+                  padding: const EdgeInsets.all(16),
+                  sliver: SliverGrid(
+                    gridDelegate:
+                        const SliverGridDelegateWithMaxCrossAxisExtent(
+                          maxCrossAxisExtent: 150,
+                          childAspectRatio: 2 / 3, // Matches LibraryScreen
+                          mainAxisSpacing: 16,
+                          crossAxisSpacing: 16,
+                        ),
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final item = content[index];
+                      return _LibraryItemCard(item: item, serverUrl: serverUrl);
+                    }, childCount: content.length),
                   ),
                 );
-              }
-
-              return SliverPadding(
-                padding: const EdgeInsets.all(16),
-                sliver: SliverGrid(
-                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                    maxCrossAxisExtent: 150,
-                    childAspectRatio: 2 / 3, // Matches LibraryScreen
-                    mainAxisSpacing: 16,
-                    crossAxisSpacing: 16,
-                  ),
-                  delegate: SliverChildBuilderDelegate((context, index) {
-                    final item = content[index];
-                    return _LibraryItemCard(item: item, serverUrl: serverUrl);
-                  }, childCount: content.length),
-                ),
-              );
-            },
-            error: (err, _) =>
-                SliverToBoxAdapter(child: Center(child: Text('Error: $err'))),
-            loading: () => const SliverToBoxAdapter(
-              child: Center(child: CircularProgressIndicator()),
+              },
+              error: (err, _) =>
+                  SliverToBoxAdapter(child: Center(child: Text('Error: $err'))),
+              loading: () => const SliverToBoxAdapter(
+                child: Center(child: CircularProgressIndicator()),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

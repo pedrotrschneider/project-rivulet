@@ -160,9 +160,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     if (widget.offlineMode) {
       ref.invalidate(offlineMediaHistoryProvider(id: widget.externalId));
     } else {
-      ref.invalidate(
-        mediaHistoryProvider(externalId: widget.externalId),
-      );
+      ref.invalidate(mediaHistoryProvider(externalId: widget.externalId));
     }
   }
 
@@ -289,87 +287,89 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   Widget _buildControls() {
     return Container(
       color: Colors.black45,
-      child: Column(
-        children: [
-          // Top Bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                BackButton(
-                  color: Colors.white,
-                  onPressed: () {
-                    _reportProgress().then((_) => Navigator.pop(context));
-                  },
-                ),
-                Expanded(
-                  child: Text(
-                    _title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    overflow: TextOverflow.ellipsis,
+      child: SafeArea(
+        child: Column(
+          children: [
+            // Top Bar
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  BackButton(
+                    color: Colors.white,
+                    onPressed: () {
+                      _reportProgress().then((_) => Navigator.pop(context));
+                    },
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.audiotrack, color: Colors.white),
-                  onPressed: () => _showTrackSelector(context, 'audio'),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.subtitles, color: Colors.white),
-                  onPressed: () => _showTrackSelector(context, 'subtitle'),
-                ),
-              ],
-            ),
-          ),
-          const Spacer(),
-          // Play/Pause
-          IconButton(
-            iconSize: 64,
-            icon: Icon(
-              _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
-              color: Colors.white,
-            ),
-            onPressed: () {
-              setState(() {
-                _controller.value.isPlaying
-                    ? _controller.pause()
-                    : _controller.play();
-                _startHideControlsTimer();
-              });
-            },
-          ),
-          const Spacer(),
-          // Bottom Bar
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Text(
-                  _formatDuration(_controller.value.position),
-                  style: const TextStyle(color: Colors.white),
-                ),
-                Expanded(
-                  child: VideoProgressIndicator(
-                    _controller,
-                    allowScrubbing: true,
-                    colors: VideoProgressColors(
-                      playedColor: Theme.of(context).colorScheme.primary,
-                      bufferedColor: Colors.white24,
-                      backgroundColor: Colors.white10,
+                  Expanded(
+                    child: Text(
+                      _title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                ),
-                Text(
-                  _formatDuration(_controller.value.duration),
-                  style: const TextStyle(color: Colors.white),
-                ),
-              ],
+                  IconButton(
+                    icon: const Icon(Icons.audiotrack, color: Colors.white),
+                    onPressed: () => _showTrackSelector(context, 'audio'),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.subtitles, color: Colors.white),
+                    onPressed: () => _showTrackSelector(context, 'subtitle'),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+            const Spacer(),
+            // Play/Pause
+            IconButton(
+              iconSize: 64,
+              icon: Icon(
+                _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
+                color: Colors.white,
+              ),
+              onPressed: () {
+                setState(() {
+                  _controller.value.isPlaying
+                      ? _controller.pause()
+                      : _controller.play();
+                  _startHideControlsTimer();
+                });
+              },
+            ),
+            const Spacer(),
+            // Bottom Bar
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Text(
+                    _formatDuration(_controller.value.position),
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  Expanded(
+                    child: VideoProgressIndicator(
+                      _controller,
+                      allowScrubbing: true,
+                      colors: VideoProgressColors(
+                        playedColor: Theme.of(context).colorScheme.primary,
+                        bufferedColor: Colors.white24,
+                        backgroundColor: Colors.white10,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    _formatDuration(_controller.value.duration),
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
