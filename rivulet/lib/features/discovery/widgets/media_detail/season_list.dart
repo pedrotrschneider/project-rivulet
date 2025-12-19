@@ -96,7 +96,6 @@ class _SeasonListState extends ConsumerState<SeasonList> {
                 separatorBuilder: (_, _) =>
                     const SizedBox(width: _separatorWidth),
                 clipBehavior: Clip.none,
-                // 5. Apply the calculated padding
                 padding: EdgeInsets.only(
                   right: centerPadding > 0 ? centerPadding : 0,
                 ),
@@ -181,13 +180,10 @@ class _SeasonCardState extends State<SeasonCard> {
   void didUpdateWidget(SeasonCard oldWidget) {
     super.didUpdateWidget(oldWidget);
 
-    // If the effective node changed (e.g. recycled from index 0 to index 1)
     if (widget.focusNode != oldWidget.focusNode) {
-      // 1. Remove listener from the OLD effective node
       final oldEffectiveNode = oldWidget.focusNode ?? _internalNode;
       oldEffectiveNode?.removeListener(_onFocusChange);
 
-      // 2. Add listener to the NEW effective node
       _effectiveNode.addListener(_onFocusChange);
     }
   }
@@ -195,7 +191,6 @@ class _SeasonCardState extends State<SeasonCard> {
   @override
   void dispose() {
     _effectiveNode.removeListener(_onFocusChange);
-    // _internalNode?.dispose();
     super.dispose();
   }
 
@@ -255,7 +250,7 @@ class _SeasonCardState extends State<SeasonCard> {
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.start,
+                textAlign: TextAlign.center,
               ),
             ),
           ],

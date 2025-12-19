@@ -85,7 +85,7 @@ class DownloadService {
       mediaUuid: mediaUuid,
       url: url,
       title: title,
-      type: 'episode',
+      type: 'show',
       seasonNumber: seasonNumber,
       episodeNumber: episodeNumber,
       logoPath: logoPath,
@@ -252,13 +252,7 @@ class DownloadService {
       'backdropUrl': backdropPath,
       'logo': logoPath, // Save logo path
       'overview': overview,
-      'type': type == 'movie'
-          ? 'movie'
-          : 'show', // if fetching show, type is show. if fetching ep?
-      // When downloading an episode, we are technically downloading a 'show' component.
-      // But the 'type' param passed to startDownload depends on caller.
-      // Usually caller passes 'episode' for episodes.
-      // But for Library grouping we want 'show'.
+      'type': type,
       'imdbId': imdbId,
       'voteAverage': voteAverage,
     });

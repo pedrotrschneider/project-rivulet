@@ -61,7 +61,7 @@ class _ContinueWatchingCardState extends State<ContinueWatchingCard> {
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.historyAsync.hasValue || widget.historyAsync.value!.isEmpty) {
+    if (!widget.historyAsync.hasValue || widget.historyAsync.value!.isEmpty || widget.offlineMode) {
       return const SizedBox.shrink();
     }
 

@@ -575,11 +575,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                   seasonPosterPath: _getSeasonPosterPath(
                     seasonDetail.seasonNumber,
                   ),
-                  seasons: ref
-                      .read(showSeasonsProvider(widget.itemId))
-                      .value
-                      ?.map((s) => s.toJson())
-                      .toList(),
+                  seasons: _discoverySeasons?.map((s) => s.toJson()).toList(),
                   profileId: ref.read(selectedProfileProvider),
                 );
             ScaffoldMessenger.of(context).showSnackBar(
@@ -680,11 +676,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                 seasonPosterPath: _getSeasonPosterPath(
                   seasonDetail.seasonNumber,
                 ),
-                seasons: ref
-                    .read(showSeasonsProvider(widget.itemId))
-                    .value
-                    ?.map((s) => s.toJson())
-                    .toList(),
+                seasons: _discoverySeasons?.map((s) => s.toJson()).toList(),
                 profileId: ref.read(selectedProfileProvider),
               );
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1047,7 +1039,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                           ),
 
                           const SizedBox(width: 16),
-                          
+
                           MarkAsWatchedButton(
                             onPressed: () {
                               _markSeasonAsWatched(
@@ -1057,7 +1049,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                             },
                             tooltip: 'Mark Season Watched',
                           ),
-                          
+
                           MarkAsUnwatchedButton(
                             onPressed: () {
                               _markSeasonAsUnwatched(

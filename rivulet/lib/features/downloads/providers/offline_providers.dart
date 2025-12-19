@@ -53,24 +53,9 @@ Future<List<MediaDetail>> downloadedContent(Ref ref) async {
 Future<MediaDetail> offlineMediaDetail(Ref ref, {required String id}) async {
   final fs = ref.read(fileSystemServiceProvider);
   final profileId = ref.watch(selectedProfileProvider);
-  // Id passed here might be MediaUuid or FolderId (ImdbId).
-  // We need to find the directory.
-  // Assumption: The ID passed is the folder name OR we have to search.
-  // The 'Library' list returns items with `id` = `json['id']`.
-  // If `json['id']` != folderName, we have a mismatch.
-  // In `DownloadService`, we used `folderId = imdbId ?? mediaUuid`.
-  // And we wrote `id: mediaUuid` in json.
-  // So `downloadedContent` returns `MediaDetail` with `id: mediaUuid`.
-  // `MediaDetailScreen` calls this provider with `widget.itemId` (mediaUuid).
-
-  // Searching logic:
-  // 1. Check if directory exists with this ID directly (e.g. if it was IMDB ID).
-  // 2. Scan all directories and check `details.json` for matching `id`.
-
   final mediaDirs = await fs.listMedia(profileId: profileId);
   for (final dir in mediaDirs) {
     if (p.basename(dir.path) == id) {
-      // Direct match (unlikely if id is UUID and folder is IMDB)
       final json = await fs.readJson(dir, 'details.json');
       if (json != null) {
         return _mapJsonToDetail(json, dir.path);
@@ -156,9 +141,13 @@ Future<SeasonDetail> offlineSeasonEpisodes(
   // Sort
   episodes.sort((a, b) => a.episodeNumber.compareTo(b.episodeNumber));
 
+  final seasonDir = await fs.getSeasonDirectory(id, seasonNum, profileId: profileId);
+  final seasonDetailJson = await fs.readJson(seasonDir, 'season_details.json');
+
   return SeasonDetail(
     id: 0,
-    name: 'Season $seasonNum',
+    name: seasonDetailJson?['name'] ?? 'Season $seasonNum',
+    overview: seasonDetailJson?['overview'] ?? '',
     seasonNumber: seasonNum,
     episodes: episodes,
   );
