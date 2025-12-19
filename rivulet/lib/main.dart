@@ -16,9 +16,8 @@ import 'package:rivulet/core/network/network_monitor.dart';
 import 'package:rivulet/features/utils/platform_utils.dart';
 
 void main() async {
-  await PlatformUtils.init();
-
   WidgetsFlutterBinding.ensureInitialized();
+  await PlatformUtils.init();
 
   if (Platform.isLinux) {
     try {
