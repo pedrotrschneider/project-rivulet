@@ -13,8 +13,11 @@ import 'dart:io';
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:rivulet/core/platform/linux_path_provider.dart';
 import 'package:rivulet/core/network/network_monitor.dart';
+import 'package:rivulet/features/utils/platform_utils.dart';
 
-void main() {
+void main() async {
+  await PlatformUtils.init();
+
   WidgetsFlutterBinding.ensureInitialized();
 
   if (Platform.isLinux) {
