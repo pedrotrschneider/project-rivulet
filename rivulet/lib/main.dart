@@ -27,7 +27,10 @@ void main() async {
     }
   }
 
-  fvp.registerWith();
+  fvp.registerWith(options: {
+    'video.decoders': ['FFmpeg'], 
+    'global': {'log': 'off'} 
+  });
   runApp(const ProviderScope(child: MyApp()));
 }
 

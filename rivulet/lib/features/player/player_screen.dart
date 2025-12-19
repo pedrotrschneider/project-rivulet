@@ -56,24 +56,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
   Future<void> _initPlayer() async {
     try {
-      // Register FVP for better playback support
-      try {
-        fvp.registerWith(
-          options: {
-            'global': {'log': 'off'},
-            // Fix for "colors are off" and "audio is delayed" on some Android devices
-            // forcing software decoding prevents broken hardware decoders from being used.
-            'player': {
-              'mediacodec': '0',
-              'videotoolbox': '0', // iOS equivalent, just in case
-              'hwdec': 'no',
-              'low-latency': '0',
-              'packet-buffering': '1',
-            },
-          },
-        );
-      } catch (_) {}
-
       // Get auth token for protected streams
       final token = await ref.read(authRepositoryProvider).getToken();
       final headers = token != null
