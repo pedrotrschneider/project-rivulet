@@ -143,6 +143,7 @@ class DiscoverySeason {
   final int seasonNumber;
   final String? airDate;
   final int episodeCount;
+  final bool hasNextSeason;
 
   DiscoverySeason({
     required this.id,
@@ -151,6 +152,7 @@ class DiscoverySeason {
     required this.seasonNumber,
     this.airDate,
     required this.episodeCount,
+    required this.hasNextSeason,
   });
 
   factory DiscoverySeason.fromJson(Map<String, dynamic> json) {
@@ -161,6 +163,7 @@ class DiscoverySeason {
       seasonNumber: json['season_number'] as int? ?? 0,
       airDate: json['air_date'] as String?,
       episodeCount: json['episode_count'] as int? ?? 0,
+      hasNextSeason: json['has_next_season'] as bool? ?? false,
     );
   }
 
@@ -172,6 +175,7 @@ class DiscoverySeason {
       'season_number': seasonNumber,
       'air_date': airDate,
       'episode_count': episodeCount,
+      'has_next_season': hasNextSeason,
     };
   }
 }
@@ -184,6 +188,7 @@ class DiscoveryEpisode {
   final int episodeNumber;
   final String? airDate;
   final double? voteAverage;
+  final bool isSeasonFinale;
 
   DiscoveryEpisode({
     required this.id,
@@ -193,6 +198,7 @@ class DiscoveryEpisode {
     required this.episodeNumber,
     this.airDate,
     this.voteAverage,
+    required this.isSeasonFinale,
   });
 
   factory DiscoveryEpisode.fromJson(Map<String, dynamic> json) {
@@ -204,6 +210,7 @@ class DiscoveryEpisode {
       episodeNumber: json['episode_number'] as int? ?? 0,
       airDate: json['air_date'] as String?,
       voteAverage: (json['vote_average'] as num?)?.toDouble(),
+      isSeasonFinale: json['is_season_finale'] as bool? ?? false,
     );
   }
 }
@@ -302,9 +309,6 @@ class HistoryItem {
   final bool isWatched;
   final int? seasonNumber;
   final int? episodeNumber;
-  final int? nextSeason;
-  final int? nextEpisode;
-  final String? nextEpisodeTitle;
 
   HistoryItem({
     required this.mediaId,
@@ -320,9 +324,6 @@ class HistoryItem {
     required this.isWatched,
     this.seasonNumber,
     this.episodeNumber,
-    this.nextSeason,
-    this.nextEpisode,
-    this.nextEpisodeTitle,
   });
 
   factory HistoryItem.fromJson(Map<String, dynamic> json) {
@@ -340,9 +341,6 @@ class HistoryItem {
       isWatched: json['is_watched'] as bool? ?? false,
       seasonNumber: (json['season_number'] as num?)?.toInt(),
       episodeNumber: (json['episode_number'] as num?)?.toInt(),
-      nextSeason: (json['next_season'] as num?)?.toInt(),
-      nextEpisode: (json['next_episode'] as num?)?.toInt(),
-      nextEpisodeTitle: json['next_episode_title']?.toString(),
     );
   }
 
@@ -374,9 +372,6 @@ class HistoryItem {
       'is_watched': isWatched,
       'season_number': seasonNumber,
       'episode_number': episodeNumber,
-      'next_season': nextSeason,
-      'next_episode': nextEpisode,
-      'next_episode_title': nextEpisodeTitle,
     };
   }
 
@@ -412,9 +407,6 @@ class HistoryItem {
       isWatched: isWatched ?? this.isWatched,
       seasonNumber: seasonNumber ?? this.seasonNumber,
       episodeNumber: episodeNumber ?? this.episodeNumber,
-      nextSeason: nextSeason ?? this.nextSeason,
-      nextEpisode: nextEpisode ?? this.nextEpisode,
-      nextEpisodeTitle: nextEpisodeTitle ?? this.nextEpisodeTitle,
     );
   }
 }

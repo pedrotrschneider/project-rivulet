@@ -1,0 +1,24 @@
+meta {
+  name: Get Media History
+  type: http
+  seq: 22
+}
+
+get {
+  url: {{baseUrl}}/api/v1/history/media?external_id=tt9335498
+  body: none
+  auth: inherit
+}
+
+params:query {
+  external_id: tt9335498
+}
+
+headers {
+  X-Profile-Id: ec6ca237-0064-4b28-b952-e59ad9c5b40d
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

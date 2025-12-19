@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rivulet/features/discovery/domain/discovery_models.dart';
@@ -6,6 +7,7 @@ import 'package:rivulet/features/widgets/action_scale.dart';
 
 class ContinueWatchingCard extends StatefulWidget {
   final MediaDetail detail;
+  final List<SeasonDetail> seasonsDetail;
   final AsyncValue<List<HistoryItem>> historyAsync;
   final Future<void> Function(
     int? startPos,
@@ -20,6 +22,7 @@ class ContinueWatchingCard extends StatefulWidget {
   const ContinueWatchingCard({
     super.key,
     required this.detail,
+    required this.seasonsDetail,
     required this.historyAsync,
     required this.onResume,
     this.offlineMode = false,
@@ -42,7 +45,6 @@ class _ContinueWatchingCardState extends State<ContinueWatchingCard> {
   @override
   void dispose() {
     _playButtonNode.removeListener(_onFocusChange);
-    // _playButtonNode.dispose();
     super.dispose();
   }
 
@@ -80,16 +82,36 @@ class _ContinueWatchingCardState extends State<ContinueWatchingCard> {
     int episodeNumber = latest.episodeNumber!;
     int startTicks = latest.positionTicks;
 
+    final seasonDetail = widget.seasonsDetail.firstWhere(
+      (s) => s.seasonNumber == seasonNumber,
+    );
+    final episodeDetail = seasonDetail.episodes.firstWhere(
+      (e) => e.episodeNumber == episodeNumber,
+    );
+    final nextSeasonDetail = widget.seasonsDetail.firstWhereOrNull(
+      (s) => s.seasonNumber == seasonNumber + 1,
+    );
+
     if (latest.isWatched) {
-      // We don't know the next episode in offline mode, so if the latest
-      // episode is watched, there's nothing much we can do.
-      if (widget.offlineMode) {
+      SeasonDetail? nextSeason;
+      DiscoveryEpisode? nextEpisode;
+      if (!episodeDetail.isSeasonFinale) {
+        nextSeason = seasonDetail;
+        nextEpisode = seasonDetail.episodes.firstWhere(
+          (e) => e.episodeNumber == episodeNumber + 1,
+        );
+      } else if (nextSeasonDetail != null) {
+        nextSeason = nextSeasonDetail;
+        nextEpisode = nextSeasonDetail.episodes.first;
+      }
+
+      if (nextEpisode == null || nextSeason == null) {
         return const SizedBox.shrink();
       }
 
-      episodeTitle = latest.nextEpisodeTitle ?? 'Next Episode';
-      seasonNumber = latest.nextSeason ?? seasonNumber;
-      episodeNumber = latest.nextEpisode ?? (episodeNumber + 1);
+      episodeTitle = nextEpisode.name;
+      seasonNumber = nextSeason.seasonNumber;
+      episodeNumber = nextEpisode.episodeNumber;
       startTicks = 0;
     }
 
@@ -115,14 +137,14 @@ class _ContinueWatchingCardState extends State<ContinueWatchingCard> {
                           height: 152,
                           width: 268,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => _buildPlaceholder(),
+                          errorBuilder: (_, _, _) => _buildPlaceholder(),
                         )
                       : Image.network(
                           'https://image.tmdb.org/t/p/w300${latest.backdropPath}', // Fixed to use episode image if avail
                           height: 152,
                           width: 268,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Image.network(
+                          errorBuilder: (_, _, _) => Image.network(
                             'https://image.tmdb.org/t/p/w300${widget.detail.backdropUrl}',
                             height: 152,
                             width: 268,

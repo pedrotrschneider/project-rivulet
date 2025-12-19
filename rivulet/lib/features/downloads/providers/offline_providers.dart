@@ -147,6 +147,7 @@ Future<SeasonDetail> offlineSeasonEpisodes(
           stillPath: p.join(epDir.path, 'still.jpg'),
           episodeNumber: epNum,
           voteAverage: (json['voteAverage'] as num?)?.toDouble() ?? 0.0,
+          isSeasonFinale: json['isSeasonFinale'] ?? false,
         ),
       );
     }
@@ -216,6 +217,7 @@ Future<List<DiscoverySeason>> offlineAvailableSeasons(
               airDate: s.airDate,
               episodeCount: epDirs.length, // Use actual local count
               posterPath: p.join(sDir.path, 'poster.jpg'), // Use local poster
+              hasNextSeason: s.hasNextSeason,
             ),
           );
         }
@@ -241,6 +243,7 @@ Future<List<DiscoverySeason>> offlineAvailableSeasons(
           seasonNumber: sNum,
           episodeCount: epDirs.length,
           posterPath: p.join(sDir.path, 'poster.jpg'),
+          hasNextSeason: false,
         ),
       );
     }
@@ -329,7 +332,6 @@ Future<List<HistoryItem>> offlineMediaHistory(
           title: old.title,
           posterPath: old.posterPath,
           backdropPath: old.backdropPath,
-          nextEpisodeTitle: old.nextEpisodeTitle, // Keep these if possible
         );
       } else {
         merged[key] = item;

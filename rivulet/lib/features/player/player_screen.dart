@@ -161,7 +161,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       ref.invalidate(offlineMediaHistoryProvider(id: widget.externalId));
     } else {
       ref.invalidate(
-        mediaHistoryProvider(externalId: widget.externalId, type: widget.type),
+        mediaHistoryProvider(externalId: widget.externalId),
       );
     }
   }

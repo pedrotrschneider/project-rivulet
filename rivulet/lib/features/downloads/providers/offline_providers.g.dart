@@ -207,7 +207,7 @@ final class OfflineSeasonEpisodesProvider
 }
 
 String _$offlineSeasonEpisodesHash() =>
-    r'5ad994377c21ad5e5240691d7fe7457070a32286';
+    r'8a8639a3a400d15ca5abf569db5abe17ae339c89';
 
 /// Helper to get seasons/episodes from filesystem
 
@@ -299,7 +299,7 @@ final class OfflineAvailableSeasonsProvider
 }
 
 String _$offlineAvailableSeasonsHash() =>
-    r'a5cbf61a1f3be983167b3e4519f655ba1e47a388';
+    r'aaa2434273c351c33e511f3ec74799800ca92cf0';
 
 final class OfflineAvailableSeasonsFamily extends $Family
     with $FunctionalFamilyOverride<FutureOr<List<DiscoverySeason>>, String> {
@@ -377,7 +377,7 @@ final class OfflineMediaHistoryProvider
 }
 
 String _$offlineMediaHistoryHash() =>
-    r'62212f0700fa8b69383666a101c7b93d1a0ef018';
+    r'eedc9b579e9f154918987e35b91407950b831789';
 
 final class OfflineMediaHistoryFamily extends $Family
     with $FunctionalFamilyOverride<FutureOr<List<HistoryItem>>, String> {

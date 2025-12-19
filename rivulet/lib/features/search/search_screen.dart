@@ -279,8 +279,9 @@ class _HistoryCard extends ConsumerWidget {
         externalId: item.mediaId,
         title: item.type == 'show' ? item.seriesName! : item.title,
         type: item.type,
-        season: item.isWatched ? item.nextSeason : item.seasonNumber,
-        episode: item.isWatched ? item.nextEpisode : item.episodeNumber,
+        // TODO: Fix this!!
+        season: item.seasonNumber,
+        episode: item.episodeNumber,
         startPosition: item.positionTicks,
         imdbId: item.mediaId,
       ),
@@ -384,16 +385,20 @@ class _HistoryCard extends ConsumerWidget {
             ),
             if (item.seasonNumber != null)
               Text(
-                item.isWatched
-                    ? 'S${item.nextSeason} E${item.nextEpisode}'
-                    : 'S${item.seasonNumber} E${item.episodeNumber}',
+                // TODO: Fix this
+                // item.isWatched
+                //     ? 'S${item.nextSeason} E${item.nextEpisode}'
+                //     : 'S${item.seasonNumber} E${item.episodeNumber}',
+                    'S${item.seasonNumber} E${item.episodeNumber}',
                 style: const TextStyle(fontSize: 12, color: Colors.grey),
               ),
             if (item.seasonNumber != null)
               Text(
-                item.isWatched && item.nextEpisodeTitle != null
-                    ? item.nextEpisodeTitle!
-                    : item.title,
+                // TODO: Fix this
+                // item.isWatched && item.nextEpisodeTitle != null
+                //     ? item.nextEpisodeTitle!
+                //     : item.title,
+                item.title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontSize: 12, color: Colors.grey),

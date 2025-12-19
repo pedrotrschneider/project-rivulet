@@ -1,4 +1,3 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rivulet/features/auth/profiles_provider.dart';
 import 'package:rivulet/features/discovery/repository/discovery_repository.dart';
 import 'package:rivulet/features/downloads/services/file_system_service.dart';
@@ -81,11 +80,10 @@ class OfflineHistoryService {
             // We need externalId/type. Grab from first item.
             final first = progressList.first;
             final externalId = first['external_id'] as String?;
-            final type = first['type'] as String?;
 
-            if (externalId != null && type != null) {
+            if (externalId != null) {
               // Re-fetch history to update 'history.json'
-              final results = await repo.getMediaHistory(externalId, type);
+              final results = await repo.getMediaHistory(externalId);
               if (results.isNotEmpty) {
                 await fs.writeJson(
                   dir,

@@ -58,13 +58,14 @@ type TVShowDetails struct {
 	PosterPath   string `json:"poster_path"`
 	BackdropPath string `json:"backdrop_path"`
 	Seasons      []struct {
-		ID           int    `json:"id"`
-		Name         string `json:"name"`
-		Overview     string `json:"overview"`
-		PosterPath   string `json:"poster_path"`
-		SeasonNumber int    `json:"season_number"`
-		EpisodeCount int    `json:"episode_count"`
-		AirDate      string `json:"air_date"`
+		ID            int    `json:"id"`
+		Name          string `json:"name"`
+		Overview      string `json:"overview"`
+		PosterPath    string `json:"poster_path"`
+		SeasonNumber  int    `json:"season_number"`
+		EpisodeCount  int    `json:"episode_count"`
+		AirDate       string `json:"air_date"`
+		HasNextSeason bool   `json:"has_next_season"`
 	} `json:"seasons"`
 }
 
@@ -79,21 +80,22 @@ type SeasonDetails struct {
 }
 
 type Episode struct {
-	AirDate       string  `json:"air_date"`
-	EpisodeNumber int     `json:"episode_number"`
-	ID            int     `json:"id"`
-	Name          string  `json:"name"`
-	Overview      string  `json:"overview"`
-	StillPath     string  `json:"still_path"`
-	VoteAverage   float64 `json:"vote_average"`
-	Runtime       int     `json:"runtime"`
+	AirDate        string  `json:"air_date"`
+	EpisodeNumber  int     `json:"episode_number"`
+	ID             int     `json:"id"`
+	Name           string  `json:"name"`
+	Overview       string  `json:"overview"`
+	StillPath      string  `json:"still_path"`
+	VoteAverage    float64 `json:"vote_average"`
+	Runtime        int     `json:"runtime"`
+	IsSeasonFinale bool    `json:"is_season_finale"`
 }
 
 // --- Methods ---
 
 func (c *Client) Search(apiKey, query string) ([]Result, error) {
-	// We use 'multi' search to get movies and shows mixed
 	u := fmt.Sprintf("%s/search/multi?api_key=%s&query=%s&include_adult=false&language=en-US", BaseURL, apiKey, url.QueryEscape(query))
+	fmt.Printf("TMDB Request [Search]: %s\n", u);
 
 	resp, err := c.HttpClient.Get(u)
 	if err != nil {
@@ -126,6 +128,7 @@ func (c *Client) Search(apiKey, query string) ([]Result, error) {
 
 func (c *Client) GetTrending(apiKey string) ([]Result, error) {
 	u := fmt.Sprintf("%s/trending/all/week?api_key=%s&language=en-US", BaseURL, apiKey)
+	fmt.Printf("TMDB Request [GetTrending]: %s\n", u);
 
 	resp, err := c.HttpClient.Get(u)
 	if err != nil {
@@ -157,6 +160,7 @@ func (c *Client) GetLogo(apiKey string, tmdbID int, mediaType string) (string, e
 	}
 
 	u := fmt.Sprintf("%s/%s/%d/images?api_key=%s&include_image_language=en,null", BaseURL, endpointType, tmdbID, apiKey)
+	fmt.Printf("TMDB Request [GetLogo]: %s\n", u);
 
 	resp, err := c.HttpClient.Get(u)
 	if err != nil {
@@ -182,6 +186,7 @@ func (c *Client) GetLogo(apiKey string, tmdbID int, mediaType string) (string, e
 // GetTVShowDetails fetches season info
 func (c *Client) GetTVShowDetails(apiKey string, tmdbID int) (*TVShowDetails, error) {
 	u := fmt.Sprintf("%s/tv/%d?api_key=%s&language=en-US", BaseURL, tmdbID, apiKey)
+	fmt.Printf("TMDB Request [GetTVShowDetails]: %s\n", u);
 
 	resp, err := c.HttpClient.Get(u)
 	if err != nil {
@@ -200,6 +205,7 @@ func (c *Client) GetTVShowDetails(apiKey string, tmdbID int) (*TVShowDetails, er
 // GetSeasonDetails fetches all episodes for a specific season
 func (c *Client) GetSeasonDetails(apiKey string, tmdbID, seasonNum int) (*SeasonDetails, error) {
 	u := fmt.Sprintf("%s/tv/%d/season/%d?api_key=%s&language=en-US", BaseURL, tmdbID, seasonNum, apiKey)
+	fmt.Printf("TMDB Request [GetSeasonDetails]: %s\n", u);
 
 	resp, err := c.HttpClient.Get(u)
 	if err != nil {
@@ -228,6 +234,7 @@ func (c *Client) GetSeasonDetails(apiKey string, tmdbID, seasonNum int) (*Season
 // GetEpisodeDetails fetches a specific episode
 func (c *Client) GetEpisodeDetails(apiKey string, tmdbID, seasonNum, episodeNum int) (*Episode, error) {
 	u := fmt.Sprintf("%s/tv/%d/season/%d/episode/%d?api_key=%s&language=en-US", BaseURL, tmdbID, seasonNum, episodeNum, apiKey)
+	fmt.Printf("TMDB Request [GetEpisodeDetails]: %s\n", u);
 
 	resp, err := c.HttpClient.Get(u)
 	if err != nil {
@@ -259,6 +266,7 @@ type MovieDetails struct {
 // GetMovieDetails fetches movie info
 func (c *Client) GetMovieDetails(apiKey string, tmdbID int) (*MovieDetails, error) {
 	u := fmt.Sprintf("%s/movie/%d?api_key=%s&language=en-US", BaseURL, tmdbID, apiKey)
+	fmt.Printf("TMDB Request [GetMovieDetails]: %s\n", u);
 
 	resp, err := c.HttpClient.Get(u)
 	if err != nil {

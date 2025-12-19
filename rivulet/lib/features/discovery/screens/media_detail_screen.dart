@@ -6,6 +6,7 @@ import 'package:rivulet/features/discovery/discovery_provider.dart';
 import 'dart:convert';
 import 'package:background_downloader/background_downloader.dart';
 import 'package:path/path.dart' as p;
+import 'package:rivulet/features/discovery/widgets/media_detail/mark_as_watched_button.dart';
 import 'package:rivulet/features/widgets/action_scale.dart';
 import 'dart:io';
 
@@ -14,6 +15,8 @@ import '../domain/discovery_models.dart';
 import '../../downloads/services/download_service.dart';
 import '../../downloads/providers/downloads_provider.dart';
 import '../../downloads/providers/offline_providers.dart';
+import '../../downloads/services/offline_history_service.dart';
+import '../../discovery/repository/discovery_repository.dart';
 import '../../player/player_screen.dart';
 import '../widgets/media_detail/backdrop_background.dart';
 import '../widgets/media_detail/poster_banner.dart';
@@ -45,38 +48,129 @@ class MediaDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
+  MediaDetail? _mediaDetail;
+  List<DiscoverySeason>? _discoverySeasons; // Stores list of seasons metadata
+  List<SeasonDetail>?
+  _seasonsDetail; // Stores ALL season details (episodes etc)
+
+  // View State (Restored)
   ShowViewMode _viewMode = ShowViewMode.main;
-  int? _selectedSeason;
+  DiscoverySeason? _selectedSeason;
   DiscoveryEpisode? _selectedEpisode;
-  SeasonDetail? _seasonDetail;
+  SeasonDetail? _seasonDetail; // Current selected season detail
+
+  bool _isLoading = true;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      if (widget.offlineMode) {
+        // Offline Mode
+        if (_mediaDetail == null) {
+          final detail = await ref.read(
+            offlineMediaDetailProvider(id: widget.itemId).future,
+          );
+          _mediaDetail = detail;
+        }
+
+        if (_mediaDetail!.type == 'show' || widget.type == 'show') {
+          final seasons = await ref.read(
+            offlineAvailableSeasonsProvider(id: widget.itemId).future,
+          );
+          _discoverySeasons = seasons;
+
+          // Load all season details
+          final details = <SeasonDetail>[];
+          for (final season in seasons) {
+            final sDetail = await ref.read(
+              offlineSeasonEpisodesProvider(
+                id: widget.itemId,
+                seasonNum: season.seasonNumber,
+              ).future,
+            );
+            details.add(sDetail);
+          }
+          _seasonsDetail = details;
+        }
+      } else {
+        // Online Mode
+        final repo = ref.read(discoveryRepositoryProvider);
+        if (_mediaDetail == null) {
+          final detail = await repo.getDetails(
+            widget.itemId,
+            type: widget.type ?? 'movie',
+          );
+          _mediaDetail = detail;
+        }
+
+        if (_mediaDetail!.type == 'show' || widget.type == 'show') {
+          // Fetch Seasons
+          if (_discoverySeasons == null) {
+            final seasons = await repo.getShowSeasons(widget.itemId);
+            _discoverySeasons = seasons;
+          }
+
+          // Fetch ALL Season Details
+          if (_seasonsDetail == null) {
+            final details = await Future.wait(
+              _discoverySeasons!.map(
+                (s) => repo.getSeasonDetails(widget.itemId, s.seasonNumber),
+              ),
+            );
+            _seasonsDetail = details;
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = e.toString();
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final detailAsync = widget.offlineMode
-        ? ref.watch(offlineMediaDetailProvider(id: widget.itemId))
-        : ref.watch(
-            mediaDetailProvider(
-              id: widget.itemId,
-              type: widget.type ?? 'movie',
-            ),
-          );
+    if (_isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    if (_errorMessage != null || _mediaDetail == null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Error')),
+        body: Center(
+          child: Text('Error loading data: ${_errorMessage ?? "Unknown"}'),
+        ),
+      );
+    }
+
+    final detail = _mediaDetail!;
 
     String? effectiveHistoryId;
     if (widget.itemId.startsWith('tt')) {
       effectiveHistoryId = widget.itemId;
-    } else if (detailAsync.asData?.value.imdbId != null) {
-      effectiveHistoryId = detailAsync.asData!.value.imdbId;
+    } else if (detail.imdbId != null) {
+      effectiveHistoryId = detail.imdbId;
     }
 
     final historyAsync = (effectiveHistoryId != null)
         ? (widget.offlineMode
               ? ref.watch(offlineMediaHistoryProvider(id: widget.itemId))
-              : ref.watch(
-                  mediaHistoryProvider(
-                    externalId: effectiveHistoryId,
-                    type: widget.type ?? 'movie',
-                  ),
-                ))
+              : ref.watch(mediaHistoryProvider(externalId: effectiveHistoryId)))
         : const AsyncValue<List<HistoryItem>>.data([]);
 
     return PopScope(
@@ -115,8 +209,8 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
             },
           ),
         ),
-        body: detailAsync.when(
-          data: (detail) {
+        body: Builder(
+          builder: (context) {
             String? backdropUrl = detail.backdropUrl;
             if (!widget.offlineMode &&
                 backdropUrl != null &&
@@ -131,11 +225,19 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
               return _buildShowLayout(context, detail, historyAsync);
             }
           },
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (err, stack) => Center(child: Text('Error: $err')),
         ),
       ),
     );
+  }
+
+  void _invalidateHistory(String mediaId, String type) {
+    if (widget.offlineMode) {
+      ref.invalidate(offlineMediaDetailProvider(id: mediaId));
+      ref.invalidate(offlineMediaHistoryProvider(id: mediaId));
+    } else {
+      ref.invalidate(mediaDetailProvider(id: mediaId, type: type));
+      ref.invalidate(mediaHistoryProvider(externalId: mediaId));
+    }
   }
 
   Future<void> _playMovie(int? startPos, String mediaId, String title) async {
@@ -195,18 +297,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
             ),
           ),
         );
-        // Refresh details on return to update history/progress
-        if (mounted) {
-          if (widget.offlineMode) {
-            ref.invalidate(offlineMediaDetailProvider(id: widget.itemId));
-            ref.invalidate(offlineMediaHistoryProvider(id: widget.itemId));
-          } else {
-            ref.invalidate(mediaDetailProvider(id: widget.itemId, type: type));
-            ref.invalidate(
-              mediaHistoryProvider(externalId: widget.itemId, type: type),
-            );
-          }
-        }
+        _invalidateHistory(mediaId, type);
         return;
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -223,7 +314,9 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
       isScrollControlled: true,
       builder: (context) => StreamSelectionSheet(
         externalId: mediaId,
-        title: title,
+        title: seasonNumber != null
+            ? 'S${seasonNumber}E$episodeNumber - $title'
+            : title,
         type: type,
         season: seasonNumber,
         episode: episodeNumber,
@@ -250,37 +343,163 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
           ),
         ),
       );
-
-      if (mounted) {
-        if (widget.offlineMode) {
-          ref.invalidate(offlineMediaDetailProvider(id: widget.itemId));
-          ref.invalidate(offlineMediaHistoryProvider(id: widget.itemId));
-        } else {
-          ref.invalidate(mediaDetailProvider(id: widget.itemId, type: type));
-          ref.invalidate(
-            mediaHistoryProvider(externalId: widget.itemId, type: type),
-          );
-        }
-      }
+      _invalidateHistory(mediaId, type);
     }
   }
 
-  String? _getSeasonPosterPath(int seasonNumber) {
-    if (widget.offlineMode) {
-      final seasonsAsync = ref.read(
-        offlineAvailableSeasonsProvider(id: widget.itemId),
-      );
-      return seasonsAsync.value
-          ?.where((s) => s.seasonNumber == seasonNumber)
-          .firstOrNull
-          ?.posterPath;
-    } else {
-      final seasonsAsync = ref.read(showSeasonsProvider(widget.itemId));
-      return seasonsAsync.value
-          ?.where((s) => s.seasonNumber == seasonNumber)
-          .firstOrNull
-          ?.posterPath;
+  Future<void> _markAsWatched({
+    required String mediaId,
+    required String type,
+    int? season,
+    int? episode,
+    required bool isWatched,
+  }) async {
+    final progress = {
+      'external_id': mediaId,
+      'imdb_id': mediaId,
+      'type': type,
+      'is_watched': isWatched,
+      'season': season,
+      'episode': episode,
+      'position_ticks': 0, // Reset position when marking as watched/unwatched
+      'duration_ticks': 0,
+      'timestamp': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    };
+
+    try {
+      if (widget.offlineMode) {
+        await ref
+            .read(offlineHistoryServiceProvider)
+            .saveOfflineProgress(mediaId, progress);
+      } else {
+        await ref.read(discoveryRepositoryProvider).updateProgress([progress]);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to update history: $e')));
+      }
     }
+
+    _invalidateHistory(mediaId, type);
+  }
+
+  Future<void> _markSeasonAsWatched(
+    SeasonDetail seasonDetail,
+    String mediaId,
+  ) async {
+    final scaffold = ScaffoldMessenger.of(context);
+    scaffold.showSnackBar(
+      const SnackBar(content: Text('Marking season as watched...')),
+    );
+
+    try {
+      final List<Map<String, dynamic>> batchProgress = [];
+      final timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+      for (final episode in seasonDetail.episodes) {
+        batchProgress.add({
+          'external_id': mediaId,
+          'imdb_id': mediaId,
+          'type': 'show',
+          'is_watched': true,
+          'season': seasonDetail.seasonNumber,
+          'episode': episode.episodeNumber,
+          'position_ticks': 0,
+          'duration_ticks': 0, // Assume completed
+          'timestamp': timestamp,
+        });
+      }
+
+      if (widget.offlineMode) {
+        for (final p in batchProgress) {
+          await ref
+              .read(offlineHistoryServiceProvider)
+              .saveOfflineProgress(mediaId, p);
+        }
+      } else {
+        await ref
+            .read(discoveryRepositoryProvider)
+            .updateProgress(batchProgress);
+      }
+    } catch (e) {
+      if (mounted) {
+        scaffold.hideCurrentSnackBar();
+        scaffold.showSnackBar(
+          SnackBar(content: Text('Failed to mark season: $e')),
+        );
+      }
+    }
+
+    _invalidateHistory(mediaId, 'show');
+
+    scaffold.hideCurrentSnackBar();
+    scaffold.showSnackBar(
+      const SnackBar(content: Text('Season marked as watched')),
+    );
+  }
+
+  Future<void> _markSeasonAsUnwatched(
+    SeasonDetail seasonDetail,
+    String mediaId,
+  ) async {
+    final scaffold = ScaffoldMessenger.of(context);
+    scaffold.showSnackBar(
+      const SnackBar(content: Text('Marking season as watched...')),
+    );
+
+    try {
+      final List<Map<String, dynamic>> batchProgress = [];
+      final timestamp = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+      for (final episode in seasonDetail.episodes) {
+        batchProgress.add({
+          'external_id': mediaId,
+          'imdb_id': mediaId,
+          'type': 'show',
+          'is_watched': false,
+          'season': seasonDetail.seasonNumber,
+          'episode': episode.episodeNumber,
+          'position_ticks': 0,
+          'duration_ticks': 0, // Assume completed
+          'timestamp': timestamp,
+        });
+      }
+
+      if (widget.offlineMode) {
+        for (final p in batchProgress) {
+          await ref
+              .read(offlineHistoryServiceProvider)
+              .saveOfflineProgress(mediaId, p);
+        }
+      } else {
+        await ref
+            .read(discoveryRepositoryProvider)
+            .updateProgress(batchProgress);
+      }
+    } catch (e) {
+      if (mounted) {
+        scaffold.hideCurrentSnackBar();
+        scaffold.showSnackBar(
+          SnackBar(content: Text('Failed to mark season: $e')),
+        );
+      }
+    }
+
+    _invalidateHistory(mediaId, 'show');
+
+    scaffold.hideCurrentSnackBar();
+    scaffold.showSnackBar(
+      const SnackBar(content: Text('Season marked as watched')),
+    );
+  }
+
+  String? _getSeasonPosterPath(int seasonNumber) {
+    return _discoverySeasons!
+        .where((s) => s.seasonNumber == seasonNumber)
+        .firstOrNull
+        ?.posterPath;
   }
 
   Map<String, dynamic> _getTaskMetadata(TaskRecord record) {
@@ -436,7 +655,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
         season: seasonDetail.seasonNumber,
         episode: episode.episodeNumber,
         imdbId: detail.imdbId,
-        onStreamSelected: (url, _, __) {
+        onStreamSelected: (url, _, _) {
           ref
               .read(downloadServiceProvider)
               .startEpisodeDownload(
@@ -583,7 +802,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              '${detail.rating!.toStringAsFixed(1)}',
+                              detail.rating!.toStringAsFixed(1),
                               style: Theme.of(context).textTheme.titleMedium,
                             ),
                             const SizedBox(width: 16),
@@ -610,6 +829,15 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                                   ?.copyWith(fontWeight: FontWeight.bold),
                             ),
                           ),
+                          const SizedBox(width: 16),
+                          if (!widget.offlineMode)
+                            LibraryButton(
+                              itemId: widget.itemId,
+                              type:
+                                  widget.type ??
+                                  'movie', // defaulting to type logic
+                              offlineMode: widget.offlineMode,
+                            ),
                         ],
                       ),
                       const SizedBox(height: 24),
@@ -654,28 +882,25 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                       // Buttons Row
                       Row(
                         children: [
-                          if (!widget.offlineMode)
-                            LibraryButton(
-                              itemId: widget.itemId,
-                              type:
-                                  widget.type ??
-                                  'movie', // defaulting to type logic
-                              offlineMode: widget.offlineMode,
-                            ),
-
                           // Download Button (Square)
                           if (!widget.offlineMode)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 16),
-                              child: DownloadButton(
-                                mediaId: detail.id,
-                                imdbId: detail.imdbId,
-                                tooltip: 'Download Movie',
-                                onDownload: () {
-                                  _movieDownloadSheet(context, ref, detail);
-                                },
-                              ),
+                            DownloadButton(
+                              mediaId: detail.id,
+                              imdbId: detail.imdbId,
+                              tooltip: 'Download Movie',
+                              onDownload: () {
+                                _movieDownloadSheet(context, ref, detail);
+                              },
                             ),
+
+                          // Mark as Watched Button (Movie)
+                          DynamicWatchedButton(
+                            detail: detail,
+                            selectedSeason: null,
+                            selectedEpisode: null,
+                            markAsWatched: _markAsWatched,
+                            offlineMode: widget.offlineMode,
+                          ),
 
                           // Play Button with Progress Overlay
                           Expanded(
@@ -726,218 +951,225 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
     AsyncValue<List<HistoryItem>> historyAsync,
   ) {
     // 1. Fetch Episodes
-    final episodesAsync = widget.offlineMode
-        ? ref.watch(
-            offlineSeasonEpisodesProvider(
-              id: widget.itemId,
-              seasonNum: _selectedSeason!,
-            ),
-          )
-        : ref.watch(
-            seasonEpisodesProvider(
-              id: widget.itemId,
-              seasonNum: _selectedSeason!,
-            ),
-          );
+    // 1. Fetch Episodes from CACHE
+    final seasonDetail = _seasonsDetail?.firstWhereOrNull(
+      (s) => s.seasonNumber == _selectedSeason!.seasonNumber,
+    );
 
-    return episodesAsync.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, stack) => Center(child: Text('Error: $err')),
-      data: (seasonDetail) {
-        _seasonDetail = seasonDetail;
-        final episodes = seasonDetail.episodes;
+    if (seasonDetail == null) {
+      return const Center(child: Text('Season details not found'));
+    }
 
-        // Find Season Poster
-        final seasonsAsync = widget.offlineMode
-            ? ref.watch(offlineAvailableSeasonsProvider(id: widget.itemId))
-            : ref.watch(showSeasonsProvider(widget.itemId));
-        final seasonPoster = seasonsAsync.value
-            ?.where((s) => s.seasonNumber == _selectedSeason)
-            .firstOrNull
-            ?.posterPath;
+    // Update current season detail pointer
+    _seasonDetail = seasonDetail;
 
-        final posterUrlToUse = seasonPoster != null
-            ? (widget.offlineMode
-                  ? seasonPoster
-                  : 'https://image.tmdb.org/t/p/w780$seasonPoster')
-            : (detail.posterUrl != null && detail.posterUrl!.startsWith('/')
-                  ? (widget.offlineMode
-                        ? detail.posterUrl
-                        : 'https://image.tmdb.org/t/p/w780${detail.posterUrl}')
-                  : detail.posterUrl);
+    final episodes = seasonDetail.episodes;
 
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            BackdropBackground(
-              backdropUrl: detail.backdropUrl,
-              offlineMode: widget.offlineMode,
-            ),
-            Positioned.fill(
-              child: Padding(
-                padding: const EdgeInsets.all(32.0),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Left Column: Poster (Flex 3)
-                    Expanded(
-                      flex: 3,
-                      child: Column(
+    // Find Season Poster from CACHE
+    final seasonPoster = _discoverySeasons
+        ?.firstWhereOrNull(
+          (s) => s.seasonNumber == _selectedSeason!.seasonNumber,
+        )
+        ?.posterPath;
+
+    final posterUrlToUse = seasonPoster != null
+        ? (widget.offlineMode
+              ? seasonPoster
+              : 'https://image.tmdb.org/t/p/w780$seasonPoster')
+        : (detail.posterUrl != null && detail.posterUrl!.startsWith('/')
+              ? (widget.offlineMode
+                    ? detail.posterUrl
+                    : 'https://image.tmdb.org/t/p/w780${detail.posterUrl}')
+              : detail.posterUrl);
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        BackdropBackground(
+          backdropUrl: detail.backdropUrl,
+          offlineMode: widget.offlineMode,
+        ),
+        Positioned.fill(
+          child: Padding(
+            padding: const EdgeInsets.all(32.0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Left Column: Poster (Flex 3)
+                Expanded(
+                  flex: 3,
+                  child: Column(
+                    children: [
+                      PosterBanner(
+                        posterUrl: posterUrlToUse,
+                        offlineMode: widget.offlineMode,
+                        placeholderIcon: Icons.tv,
+                      ),
+                      const SizedBox(height: 24),
+                      // Back Button
+                      // Back Button Removed as per request
+                    ],
+                  ),
+                ),
+
+                const SizedBox(width: 32),
+
+                // Right Column: Episodes (Flex 9)
+                Expanded(
+                  flex: 9,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Header
+                      Row(
                         children: [
-                          PosterBanner(
-                            posterUrl: posterUrlToUse,
-                            offlineMode: widget.offlineMode,
-                            placeholderIcon: Icons.tv,
+                          // Download Season Button
+                          ActionScale(
+                            builder: (context, node) {
+                              return FilledButton.icon(
+                                focusNode: node,
+                                onPressed: () {
+                                  // Batch Download
+                                  _startBulkDownload(episodes, detail);
+                                },
+                                icon: const Icon(Icons.download_rounded),
+                                label: const Text('Download Season'),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: Theme.of(
+                                    context,
+                                  ).colorScheme.tertiary,
+                                  foregroundColor: Theme.of(
+                                    context,
+                                  ).colorScheme.onTertiary,
+                                ),
+                              );
+                            },
                           ),
-                          const SizedBox(height: 24),
-                          // Back Button
-                          // Back Button Removed as per request
+
+                          const SizedBox(width: 16),
+                          
+                          MarkAsWatchedButton(
+                            onPressed: () {
+                              _markSeasonAsWatched(
+                                seasonDetail,
+                                detail.imdbId ?? detail.id,
+                              );
+                            },
+                            tooltip: 'Mark Season Watched',
+                          ),
+                          
+                          MarkAsUnwatchedButton(
+                            onPressed: () {
+                              _markSeasonAsUnwatched(
+                                seasonDetail,
+                                detail.imdbId ?? detail.id,
+                              );
+                            },
+                            tooltip: 'Mark Season Unwatched',
+                          ),
+                          const SizedBox(width: 24),
+                          // Title Group
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  detail.title,
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineMedium
+                                      ?.copyWith(fontWeight: FontWeight.bold),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text(
+                                  'Season ${_selectedSeason?.seasonNumber}'
+                                  '${seasonDetail.name.isNotEmpty && seasonDetail.name != "Season ${_selectedSeason?.seasonNumber}" ? " - ${seasonDetail.name}" : ""}',
+                                  style: Theme.of(context).textTheme.titleLarge
+                                      ?.copyWith(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.secondary,
+                                      ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
-                    ),
 
-                    const SizedBox(width: 32),
-
-                    // Right Column: Episodes (Flex 9)
-                    Expanded(
-                      flex: 9,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Header
-                          Row(
-                            children: [
-                              // Download Season Button
-                              ActionScale(
-                                builder: (context, node) {
-                                  return FilledButton.icon(
-                                    focusNode: node,
-                                    onPressed: () {
-                                      // Batch Download
-                                      _startBulkDownload(episodes, detail);
-                                    },
-                                    icon: const Icon(Icons.download_rounded),
-                                    label: const Text('Download Season'),
-                                    style: FilledButton.styleFrom(
-                                      backgroundColor: Theme.of(
-                                        context,
-                                      ).colorScheme.tertiary,
-                                      foregroundColor: Theme.of(
-                                        context,
-                                      ).colorScheme.onTertiary,
-                                    ),
-                                  );
-                                },
+                      if (seasonDetail.overview != null &&
+                          seasonDetail.overview!.isNotEmpty) ...[
+                        const SizedBox(height: 16),
+                        ExpandableText(
+                          seasonDetail.overview!,
+                          maxLines: 3,
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
                               ),
-                              const SizedBox(width: 24),
-                              // Title Group
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      detail.title,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .headlineMedium
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    Text(
-                                      'Season $_selectedSeason'
-                                      '${seasonDetail.name.isNotEmpty && seasonDetail.name != "Season $_selectedSeason" ? " - ${seasonDetail.name}" : ""}',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleLarge
-                                          ?.copyWith(
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.secondary,
-                                          ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
+                        ),
+                      ],
 
-                          if (seasonDetail.overview != null &&
-                              seasonDetail.overview!.isNotEmpty) ...[
-                            const SizedBox(height: 16),
-                            ExpandableText(
-                              seasonDetail.overview!,
-                              maxLines: 3,
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant,
-                                  ),
-                            ),
-                          ],
+                      const Divider(height: 32),
 
-                          const Divider(height: 32),
+                      // Episode List
+                      Expanded(
+                        child: ListView.separated(
+                          itemCount: episodes.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 16),
+                          itemBuilder: (context, index) {
+                            final episode = episodes[index];
 
-                          // Episode List
-                          Expanded(
-                            child: ListView.separated(
-                              itemCount: episodes.length,
-                              separatorBuilder: (_, __) =>
-                                  const SizedBox(height: 16),
-                              itemBuilder: (context, index) {
-                                final episode = episodes[index];
+                            // Find History
+                            final historyItem = historyAsync.value
+                                ?.firstWhereOrNull(
+                                  (h) =>
+                                      (h.mediaId == detail.id ||
+                                          h.mediaId == detail.imdbId) &&
+                                      h.seasonNumber ==
+                                          _selectedSeason?.seasonNumber &&
+                                      h.episodeNumber == episode.episodeNumber,
+                                );
 
-                                // Find History
-                                final historyItem = historyAsync.value
-                                    ?.firstWhereOrNull(
-                                      (h) =>
-                                          (h.mediaId == detail.id ||
-                                              h.mediaId == detail.imdbId) &&
-                                          h.seasonNumber == _selectedSeason &&
-                                          h.episodeNumber ==
-                                              episode.episodeNumber,
-                                    );
-
-                                return EpisodeCard(
-                                  episode: episode,
-                                  history: historyItem,
-                                  mediaId: detail.id,
-                                  imdbId: detail.imdbId,
-                                  season: _selectedSeason!,
-                                  offlineMode: widget.offlineMode,
-                                  onTap: () {
-                                    setState(() {
-                                      _selectedEpisode = episode;
-                                      _viewMode = ShowViewMode.episode;
-                                    });
-                                  },
-                                  onDownload: () {
-                                    _showDownloadSheet(
-                                      context,
-                                      ref,
-                                      detail,
-                                      episode,
-                                    );
-                                  },
+                            return EpisodeCard(
+                              episode: episode,
+                              history: historyItem,
+                              mediaId: detail.id,
+                              imdbId: detail.imdbId,
+                              season: _selectedSeason!.seasonNumber,
+                              offlineMode: widget.offlineMode,
+                              onTap: () {
+                                setState(() {
+                                  _selectedEpisode = episode;
+                                  _viewMode = ShowViewMode.episode;
+                                });
+                              },
+                              onDownload: () {
+                                _showDownloadSheet(
+                                  context,
+                                  ref,
+                                  detail,
+                                  episode,
                                 );
                               },
-                            ),
-                          ),
-                        ],
+                            );
+                          },
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
+              ],
             ),
-          ],
-        );
-      },
+          ),
+        ),
+      ],
     );
   }
 
@@ -951,13 +1183,11 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
     }
     final episode = _selectedEpisode!;
 
-    // Resolving Season Poster
-    final seasonsAsync = widget.offlineMode
-        ? ref.watch(offlineAvailableSeasonsProvider(id: widget.itemId))
-        : ref.watch(showSeasonsProvider(widget.itemId));
-    final seasonPoster = seasonsAsync.value
-        ?.where((s) => s.seasonNumber == _selectedSeason)
-        .firstOrNull
+    // Resolving Season Poster from CACHE
+    final seasonPoster = _discoverySeasons
+        ?.firstWhereOrNull(
+          (s) => s.seasonNumber == _selectedSeason!.seasonNumber,
+        )
         ?.posterPath;
 
     final posterUrlToUse = seasonPoster != null
@@ -1002,7 +1232,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '${detail.title} • S$_selectedSeason E${episode.episodeNumber}',
+                        '${detail.title} • S${_selectedSeason?.seasonNumber} E${episode.episodeNumber}',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           color: Theme.of(context).colorScheme.secondary,
                           fontWeight: FontWeight.bold,
@@ -1129,7 +1359,8 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                                             ?.firstWhereOrNull(
                                               (h) =>
                                                   h.seasonNumber ==
-                                                      _selectedSeason &&
+                                                      _selectedSeason
+                                                          ?.seasonNumber &&
                                                   h.episodeNumber ==
                                                       episode.episodeNumber,
                                             )
@@ -1170,7 +1401,7 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                             DownloadButton(
                               mediaId: detail.id,
                               imdbId: detail.imdbId,
-                              season: _selectedSeason,
+                              season: _selectedSeason!.seasonNumber,
                               episode: episode.episodeNumber,
                               tooltip: 'Download Episode',
                               onDownload: () {
@@ -1183,19 +1414,28 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                               },
                             ),
 
+                          // Mark as Watched Button (Episode)
+                          DynamicWatchedButton(
+                            detail: detail,
+                            selectedSeason: _selectedSeason,
+                            selectedEpisode: episode,
+                            markAsWatched: _markAsWatched,
+                            offlineMode: widget.offlineMode,
+                          ),
+
                           // Play Button with Progress Overlay
                           Expanded(
                             child: ConnectedPlayButton(
                               externalId: detail.imdbId!,
                               type: detail.type,
-                              seasonNumber: _selectedSeason,
+                              seasonNumber: _selectedSeason!.seasonNumber,
                               episodeNumber: episode.episodeNumber,
                               offlineMode: widget.offlineMode,
                               onPressed: (int? startPos) async {
                                 _playEpisode(
                                   startPos,
                                   detail.imdbId!,
-                                  _selectedSeason!,
+                                  _selectedSeason!.seasonNumber,
                                   episode.episodeNumber,
                                   episode.name,
                                 );
@@ -1408,17 +1648,18 @@ class _MediaDetailScreenState extends ConsumerState<MediaDetailScreen> {
                               child: SeasonList(
                                 itemId: widget.itemId,
                                 offlineMode: widget.offlineMode,
-                                selectedSeason: _selectedSeason,
+                                selectedSeason: _selectedSeason?.seasonNumber,
                                 showPosterPath: detail.posterUrl,
                                 leading: ContinueWatchingCard(
                                   detail: detail,
                                   historyAsync: historyAsync,
                                   onResume: _playEpisode,
                                   offlineMode: widget.offlineMode,
+                                  seasonsDetail: _seasonsDetail!,
                                 ),
-                                onSeasonSelected: (seasonNum) {
+                                onSeasonSelected: (season) {
                                   setState(() {
-                                    _selectedSeason = seasonNum;
+                                    _selectedSeason = season;
                                     _viewMode = ShowViewMode.season;
                                   });
                                 },

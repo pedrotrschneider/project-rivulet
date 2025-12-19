@@ -72,11 +72,10 @@ Future<List<StreamResult>> streamScraper(
 Future<List<HistoryItem>> mediaHistory(
   Ref ref, {
   required String externalId,
-  required String type,
 }) async {
   final results = await ref
       .read(discoveryRepositoryProvider)
-      .getMediaHistory(externalId, type);
+      .getMediaHistory(externalId);
 
   if (results.isNotEmpty) {
     // Cache to local file system for offline use

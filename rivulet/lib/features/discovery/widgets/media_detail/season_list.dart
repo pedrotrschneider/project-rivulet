@@ -20,7 +20,7 @@ class SeasonList extends ConsumerStatefulWidget {
   final String itemId;
   final bool offlineMode;
   final int? selectedSeason;
-  final ValueChanged<int> onSeasonSelected;
+  final ValueChanged<DiscoverySeason> onSeasonSelected;
   final String? showPosterPath;
   final Widget? leading;
   final FocusNode? focusNode;
@@ -55,7 +55,6 @@ class _SeasonListState extends ConsumerState<SeasonList> {
 
   @override
   void dispose() {
-    // _internalFocusNode.dispose();
     super.dispose();
   }
 
@@ -110,7 +109,7 @@ class _SeasonListState extends ConsumerState<SeasonList> {
                       season: season,
                       showPosterPath: widget.showPosterPath,
                       isSelected: season.seasonNumber == widget.selectedSeason,
-                      onTap: () => widget.onSeasonSelected(season.seasonNumber),
+                      onTap: () => widget.onSeasonSelected(season),
                       offlineMode: widget.offlineMode,
                     );
                   }
@@ -121,7 +120,7 @@ class _SeasonListState extends ConsumerState<SeasonList> {
                     season: season,
                     showPosterPath: widget.showPosterPath,
                     isSelected: season.seasonNumber == widget.selectedSeason,
-                    onTap: () => widget.onSeasonSelected(season.seasonNumber),
+                    onTap: () => widget.onSeasonSelected(season),
                     offlineMode: widget.offlineMode,
                   );
                 },
@@ -277,16 +276,8 @@ class _SeasonCardState extends State<SeasonCard> {
         );
       } else if (widget.showPosterPath != null &&
           widget.showPosterPath!.isNotEmpty) {
-        // Warning: This might be a web URL even in offline mode if we aren't careful,
-        // but typically showPosterPath passed here comes from Detail which IS offline.
-        // Let's check.
         if (widget.showPosterPath!.startsWith('http') ||
             widget.showPosterPath!.startsWith('/')) {
-          // If it looks like a URL/Path, try distinct logic?
-          // For now, assume if offlineMode is true, paths are local.
-          // But showPosterPath might be inherited from cached detail which might have web URL?
-          // Re-reading `offlineMediaDetail` provider: it sets posterUrl to local path `p.join(dir.path, 'poster.jpg')`.
-          // So it should be fine.
           return Image.file(
             File(widget.showPosterPath!),
             fit: BoxFit.cover,

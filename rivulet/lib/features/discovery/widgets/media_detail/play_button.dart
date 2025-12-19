@@ -33,7 +33,7 @@ class ConnectedPlayButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final historyAsync = offlineMode
         ? ref.watch(offlineMediaHistoryProvider(id: externalId))
-        : ref.watch(mediaHistoryProvider(externalId: externalId, type: type));
+        : ref.watch(mediaHistoryProvider(externalId: externalId));
 
     double progress = 0.0;
     String label = 'Play';

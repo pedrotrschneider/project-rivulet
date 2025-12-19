@@ -380,6 +380,15 @@ func GetShowSeasons(c echo.Context) error {
 		}
 	}
 
+	// Set has next season
+	for i := range show.Seasons {
+		if i < len(show.Seasons)-1 {
+			show.Seasons[i].HasNextSeason = true
+		} else {
+			show.Seasons[i].HasNextSeason = false
+		}
+	}
+
 	return c.JSON(http.StatusOK, show.Seasons)
 }
 
@@ -410,6 +419,14 @@ func GetSeasonEpisodes(c echo.Context) error {
 	season, err := TmdbClient.GetSeasonDetails(keys.TMDB, tmdbID, seasonNum)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+	}
+
+	for i := range season.Episodes {
+		if i < len(season.Episodes)-1 {
+			season.Episodes[i].IsSeasonFinale = false
+		} else {
+			season.Episodes[i].IsSeasonFinale = true
+		}
 	}
 
 	return c.JSON(http.StatusOK, season)
