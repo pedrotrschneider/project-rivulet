@@ -5,6 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 import 'package:fvp/fvp.dart' as fvp;
 import 'package:rivulet/features/discovery/repository/discovery_repository.dart';
+import 'package:rivulet/features/discovery/discovery_provider.dart';
+import 'package:rivulet/features/downloads/services/offline_history_service.dart';
+import 'package:rivulet/features/downloads/providers/offline_providers.dart';
 
 class PlayerScreen extends ConsumerStatefulWidget {
   final String url;
@@ -15,6 +18,7 @@ class PlayerScreen extends ConsumerStatefulWidget {
   final int? episode;
   final int startPosition; // Ticks (microseconds * 10)
   final String? imdbId;
+  final bool offlineMode;
 
   const PlayerScreen({
     super.key,
@@ -26,6 +30,7 @@ class PlayerScreen extends ConsumerStatefulWidget {
     this.episode,
     this.startPosition = 0,
     this.imdbId,
+    this.offlineMode = false,
   });
 
   @override
@@ -139,9 +144,25 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     };
 
     try {
-      await ref.read(discoveryRepositoryProvider).updateProgress([progress]);
+      if (widget.offlineMode) {
+        // Offline save
+        await ref
+            .read(offlineHistoryServiceProvider)
+            .saveOfflineProgress(widget.externalId, progress);
+      } else {
+        // Online sync
+        await ref.read(discoveryRepositoryProvider).updateProgress([progress]);
+      }
     } catch (e) {
       debugPrint('Failed to sync progress: $e');
+    }
+
+    if (widget.offlineMode) {
+      ref.invalidate(offlineMediaHistoryProvider(id: widget.externalId));
+    } else {
+      ref.invalidate(
+        mediaHistoryProvider(externalId: widget.externalId),
+      );
     }
   }
 
@@ -236,7 +257,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   void dispose() {
     _progressTimer?.cancel();
     _hideControlsTimer?.cancel();
-    _reportProgress(); // Last sync
     _controller.dispose();
     super.dispose();
   }
@@ -279,8 +299,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                 BackButton(
                   color: Colors.white,
                   onPressed: () {
-                    _reportProgress();
-                    Navigator.pop(context);
+                    _reportProgress().then((_) => Navigator.pop(context));
                   },
                 ),
                 Expanded(

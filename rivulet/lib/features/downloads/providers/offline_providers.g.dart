@@ -55,7 +55,7 @@ final class DownloadedContentProvider
   }
 }
 
-String _$downloadedContentHash() => r'd4e372c03675f48d5229cf0e80ccda7380c9131c';
+String _$downloadedContentHash() => r'c612e9a3049decf33306b93e0e00c6f9acde5007';
 
 /// Helper to get media detail from filesystem for offline mode
 
@@ -118,7 +118,7 @@ final class OfflineMediaDetailProvider
 }
 
 String _$offlineMediaDetailHash() =>
-    r'f8f6e22d9ca39fb44811ff851c6fd759ec2b9bf8';
+    r'05735fb2292399c685639dd795b2b910f4134f4d';
 
 /// Helper to get media detail from filesystem for offline mode
 
@@ -207,7 +207,7 @@ final class OfflineSeasonEpisodesProvider
 }
 
 String _$offlineSeasonEpisodesHash() =>
-    r'a038d9845d6f188e595b26eac4c592c6c6da9c5d';
+    r'8a8639a3a400d15ca5abf569db5abe17ae339c89';
 
 /// Helper to get seasons/episodes from filesystem
 
@@ -299,7 +299,7 @@ final class OfflineAvailableSeasonsProvider
 }
 
 String _$offlineAvailableSeasonsHash() =>
-    r'fa4c8440d830187a3a43e808ec05a08795e85091';
+    r'aaa2434273c351c33e511f3ec74799800ca92cf0';
 
 final class OfflineAvailableSeasonsFamily extends $Family
     with $FunctionalFamilyOverride<FutureOr<List<DiscoverySeason>>, String> {
@@ -317,4 +317,82 @@ final class OfflineAvailableSeasonsFamily extends $Family
 
   @override
   String toString() => r'offlineAvailableSeasonsProvider';
+}
+
+@ProviderFor(offlineMediaHistory)
+const offlineMediaHistoryProvider = OfflineMediaHistoryFamily._();
+
+final class OfflineMediaHistoryProvider
+    extends
+        $FunctionalProvider<
+          AsyncValue<List<HistoryItem>>,
+          List<HistoryItem>,
+          FutureOr<List<HistoryItem>>
+        >
+    with
+        $FutureModifier<List<HistoryItem>>,
+        $FutureProvider<List<HistoryItem>> {
+  const OfflineMediaHistoryProvider._({
+    required OfflineMediaHistoryFamily super.from,
+    required String super.argument,
+  }) : super(
+         retry: null,
+         name: r'offlineMediaHistoryProvider',
+         isAutoDispose: true,
+         dependencies: null,
+         $allTransitiveDependencies: null,
+       );
+
+  @override
+  String debugGetCreateSourceHash() => _$offlineMediaHistoryHash();
+
+  @override
+  String toString() {
+    return r'offlineMediaHistoryProvider'
+        ''
+        '($argument)';
+  }
+
+  @$internal
+  @override
+  $FutureProviderElement<List<HistoryItem>> $createElement(
+    $ProviderPointer pointer,
+  ) => $FutureProviderElement(pointer);
+
+  @override
+  FutureOr<List<HistoryItem>> create(Ref ref) {
+    final argument = this.argument as String;
+    return offlineMediaHistory(ref, id: argument);
+  }
+
+  @override
+  bool operator ==(Object other) {
+    return other is OfflineMediaHistoryProvider && other.argument == argument;
+  }
+
+  @override
+  int get hashCode {
+    return argument.hashCode;
+  }
+}
+
+String _$offlineMediaHistoryHash() =>
+    r'eedc9b579e9f154918987e35b91407950b831789';
+
+final class OfflineMediaHistoryFamily extends $Family
+    with $FunctionalFamilyOverride<FutureOr<List<HistoryItem>>, String> {
+  const OfflineMediaHistoryFamily._()
+    : super(
+        retry: null,
+        name: r'offlineMediaHistoryProvider',
+        dependencies: null,
+        $allTransitiveDependencies: null,
+        isAutoDispose: true,
+      );
+
+  OfflineMediaHistoryProvider call({required String id}) =>
+      OfflineMediaHistoryProvider._(argument: id, from: this);
+
+  @override
+  String toString() => r'offlineMediaHistoryProvider';
 }

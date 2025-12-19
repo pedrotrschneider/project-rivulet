@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../player/player_screen.dart';
 import '../discovery_provider.dart';
 import '../repository/discovery_repository.dart';
 
@@ -97,13 +96,15 @@ class _StreamSelectionSheetState extends ConsumerState<StreamSelectionSheet> {
             .addFavoriteStream(widget.externalId, hash);
       }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
-          if (isFav)
+          if (isFav) {
             _favoriteHashes.add(hash);
-          else
+          } else {
             _favoriteHashes.remove(hash);
+          }
         });
+      }
     }
   }
 
@@ -113,19 +114,6 @@ class _StreamSelectionSheetState extends ConsumerState<StreamSelectionSheet> {
     });
 
     try {
-      // Logic: If selected magnet matches resume magnet, try to use resume file index?
-      // But only if current fileIndex is absent or we want to override?
-      // Actually, scraper 'fileIndex' is what we trust for THAT stream.
-      // Resume 'fileIndex' is for the *previous* session.
-      // If we pick a NEW stream, we use ITS index (or default).
-      // If we pick the SAME stream (hash match), we *might* want to force index.
-      // But scraper usually separates files into separate streams if multifile?
-      // Or scraper returns one entry per torrent.
-      // If Torrentio returns "S02 Packs", we get one entry.
-      // If we resume, we want `fileIndex` to resolve correctly.
-      // If the user clicks the *same* magnet entry, we should presumably respect the resume index if available.
-      // How do we know it's the same? Compare magnets.
-
       final repo = ref.read(discoveryRepositoryProvider);
       final result = await repo.resolveStream(
         magnet: magnet,
@@ -141,41 +129,12 @@ class _StreamSelectionSheetState extends ConsumerState<StreamSelectionSheet> {
 
       if (url != null) {
         if (widget.onStreamSelected != null) {
-          // If in download mode (callback provided), return the stream info
-          // We need quality/filename from somewhere?
-          // Use 'magnet' or pass more data from resolveStream result if available?
-          // result['url'] is the direct link.
           widget.onStreamSelected!(url, null, "Unknown");
-          // Improving this: resolveStream returns simple map.
-          // We might want to pass 'stream.quality' which was selected.
-          // But 'stream' object is in the UI loop, here we only have magnet string.
-          // Ideally we pass stream object to _handleStreamSelection?
-          // For now, let's just pass URL.
           Navigator.pop(context);
           return;
         }
 
-        int startPos = 0;
-        if (widget.startPosition != null && widget.startPosition! > 0) {
-          startPos = widget.startPosition!;
-        }
-
-        Navigator.pop(context); // Close sheet
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => PlayerScreen(
-              url: url,
-              externalId: widget.externalId,
-              title: widget.title,
-              type: widget.type,
-              season: widget.season,
-              episode: widget.episode,
-              startPosition: startPos,
-              imdbId: widget.imdbId,
-            ),
-          ),
-        );
+        Navigator.pop(context, url);
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -290,22 +249,7 @@ class _StreamSelectionSheetState extends ConsumerState<StreamSelectionSheet> {
               subtitle: const Text('Local file'),
               trailing: const Icon(Icons.play_arrow),
               onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => PlayerScreen(
-                      url: 'file://${widget.downloadedPath}',
-                      externalId: widget.externalId,
-                      title: widget.title,
-                      type: widget.type,
-                      season: widget.season,
-                      episode: widget.episode,
-                      startPosition: widget.startPosition ?? 0,
-                      imdbId: widget.imdbId,
-                    ),
-                  ),
-                );
+                Navigator.pop(context, 'file://${widget.downloadedPath}');
               },
             ),
             const Divider(),

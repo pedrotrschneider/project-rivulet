@@ -1,0 +1,16 @@
+meta {
+  name: Delete History
+  type: http
+  seq: 21
+}
+
+delete {
+  url: {{baseUrl}}/api/vi/history/progress
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

@@ -139,11 +139,10 @@ class DiscoveryRepository {
 
   Future<List<HistoryItem>> getMediaHistory(
     String externalId,
-    String type,
   ) async {
     final response = await _dio.get(
       '/history/media',
-      queryParameters: {'external_id': externalId, 'type': type},
+      queryParameters: {'external_id': externalId},
     );
     if (response.data == null) return [];
     final data = response.data;
@@ -157,9 +156,7 @@ class DiscoveryRepository {
 
   Future<void> updateProgress(List<Map<String, dynamic>> progress) async {
     if (progress.isEmpty) return;
-    // Add file_index if present using the snake_case key
     final processed = progress.map((p) {
-      // Ideally the input map already has the correct keys
       return p;
     }).toList();
 

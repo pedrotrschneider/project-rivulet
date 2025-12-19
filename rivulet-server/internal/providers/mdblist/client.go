@@ -57,6 +57,8 @@ type MediaDetail struct {
 
 func (c *Client) Search(apiKey, query string) (*SearchResult, error) {
 	u, _ := url.Parse(fmt.Sprintf("%s/", c.BaseURL))
+	fmt.Printf("MDBList Request [Search]: %s\n", u.String());
+
 	q := u.Query()
 	q.Add("apikey", apiKey)
 	q.Add("s", query)
@@ -78,30 +80,34 @@ func (c *Client) Search(apiKey, query string) (*SearchResult, error) {
 // GetDetails handles both IMDB and TMDB IDs
 func (c *Client) GetDetails(apiKey, id, mediaType string) (*MediaDetail, error) {
 	u, _ := url.Parse(fmt.Sprintf("%s/", c.BaseURL))
+	
 	q := u.Query()
 	q.Add("apikey", apiKey)
-
+	
 	// Smart ID Detection
 	if len(id) > 2 && id[:2] == "tt" {
 		q.Add("i", id) // IMDB ID (Usually unique, but type helps)
-	} else {
+		} else {
 		// TMDB ID handling
 		cleanID := id
 		if len(id) > 2 && id[:2] == "tm" {
 			cleanID = id[2:]
 		}
 		q.Add("tm", cleanID)
-
+		
 		// 🔧 FIX: Disambiguate TMDB IDs
 		// MDBList uses 'm=movie' or 'm=show'
-		if mediaType == "tv" || mediaType == "show" || mediaType == "series" {
+		switch mediaType {
+		case "tv", "show", "series":
 			q.Add("m", "show")
-		} else if mediaType == "movie" {
+		case "movie":
 			q.Add("m", "movie")
 		}
 	}
-
+	
 	u.RawQuery = q.Encode()
+	
+	fmt.Printf("MDBList Request [Details]: %s\n", u.String());
 
 	resp, err := c.HttpClient.Get(u.String())
 	if err != nil {

@@ -1,0 +1,31 @@
+Analyzing media_detail_screen.dart...                           
+
+warning • Unused import: '../../downloads/providers/download_status_provider.dart' • lib/features/discovery/screens/media_detail_screen.dart:14:8 • unused_import
+warning • Unused import: '../../player/player_screen.dart' • lib/features/discovery/screens/media_detail_screen.dart:17:8 • unused_import
+warning • The value of the field '_selectedEpisode' isn't used • lib/features/discovery/screens/media_detail_screen.dart:42:21 • unused_field
+   info • Unnecessary use of multiple underscores • lib/features/discovery/screens/media_detail_screen.dart:166:30 • unnecessary_underscores
+warning • The declaration '_startBulkDownload' isn't referenced • lib/features/discovery/screens/media_detail_screen.dart:213:16 • unused_element
+warning • The declaration '_showDownloadSheet' isn't referenced • lib/features/discovery/screens/media_detail_screen.dart:297:8 • unused_element
+   info • Unnecessary use of multiple underscores • lib/features/discovery/screens/media_detail_screen.dart:313:36 • unnecessary_underscores
+   info • Unnecessary use of multiple underscores • lib/features/discovery/screens/media_detail_screen.dart:426:39 • unnecessary_underscores
+   info • Unnecessary use of multiple underscores • lib/features/discovery/screens/media_detail_screen.dart:426:43 • unnecessary_underscores
+   info • Unnecessary use of multiple underscores • lib/features/discovery/screens/media_detail_screen.dart:433:39 • unnecessary_underscores
+   info • Unnecessary use of multiple underscores • lib/features/discovery/screens/media_detail_screen.dart:433:43 • unnecessary_underscores
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/discovery/screens/media_detail_screen.dart:445:61 • deprecated_member_use
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/discovery/screens/media_detail_screen.dart:493:49 • deprecated_member_use
+   info • Unnecessary use of multiple underscores • lib/features/discovery/screens/media_detail_screen.dart:506:57 • unnecessary_underscores
+   info • Unnecessary use of multiple underscores • lib/features/discovery/screens/media_detail_screen.dart:506:61 • unnecessary_underscores
+   info • Unnecessary use of string interpolation • lib/features/discovery/screens/media_detail_screen.dart:557:31 • unnecessary_string_interpolations
+   info • Unnecessary use of multiple underscores • lib/features/discovery/screens/media_detail_screen.dart:721:46 • unnecessary_underscores
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/discovery/screens/media_detail_screen.dart:924:49 • deprecated_member_use
+   info • Unnecessary use of multiple underscores • lib/features/discovery/screens/media_detail_screen.dart:937:57 • unnecessary_underscores
+   info • Unnecessary use of multiple underscores • lib/features/discovery/screens/media_detail_screen.dart:937:61 • unnecessary_underscores
+   info • Unnecessary use of string interpolation • lib/features/discovery/screens/media_detail_screen.dart:999:41 • unnecessary_string_interpolations
+   info • Statements in an if should be enclosed in a block • lib/features/discovery/screens/media_detail_screen.dart:1196:7 • curly_braces_in_flow_control_structures
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/discovery/screens/media_detail_screen.dart:1233:47 • deprecated_member_use
+   info • Unnecessary use of multiple underscores • lib/features/discovery/screens/media_detail_screen.dart:1367:22 • unnecessary_underscores
+   info • Unnecessary use of multiple underscores • lib/features/discovery/screens/media_detail_screen.dart:1384:33 • unnecessary_underscores
+   info • Unnecessary use of multiple underscores • lib/features/discovery/screens/media_detail_screen.dart:1400:18 • unnecessary_underscores
+   info • 'withOpacity' is deprecated and shouldn't be used. Use .withValues() to avoid precision loss • lib/features/discovery/screens/media_detail_screen.dart:1458:40 • deprecated_member_use
+
+27 issues found. (ran in 0.7s)

@@ -1,7 +1,7 @@
-import 'dart:io';
 import 'package:background_downloader/background_downloader.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path/path.dart' as p;
+
+import 'package:rivulet/features/auth/profiles_provider.dart';
 import '../services/download_service.dart';
 
 final allDownloadsProvider = StreamProvider<List<TaskRecord>>((ref) async* {
@@ -9,6 +9,8 @@ final allDownloadsProvider = StreamProvider<List<TaskRecord>>((ref) async* {
   ref.watch(downloadServiceProvider);
   // Re-run when trigger changes
   ref.watch(downloadRefreshTriggerProvider);
+  // Re-run when profile changes
+  final profileId = ref.watch(selectedProfileProvider);
 
   // Helper to filter valid records
   Future<List<TaskRecord>> getValidRecords() async {
@@ -16,18 +18,23 @@ final allDownloadsProvider = StreamProvider<List<TaskRecord>>((ref) async* {
     final valid = <TaskRecord>[];
 
     for (final r in all) {
-      if (r.status == TaskStatus.complete) {
-        final task = r.task as DownloadTask;
-        String fullPath;
-        // Match user's fix: assume directory is absolute-ish but might need leading slash anchor
-        // or just rely on it being the full path.
-        fullPath = p.join('/', task.directory, task.filename);
+      final task = r.task as DownloadTask;
 
-        if (File(fullPath).existsSync()) {
-          valid.add(r);
-        }
+      if (profileId != null && !task.directory.contains('/$profileId/')) {
+        continue;
+      }
+
+      if (r.status == TaskStatus.complete) {
+        // Match user's fix: assume directory is absolute
+        // Trust the DB record for UI state.
+        // File existence check can be flaky if path normalization differs
+        // or during finalization.
+        valid.add(r);
       } else {
         // Keeps non-completed tasks (running, failed, paused etc)
+        // We should also filter these by profile.
+        // For active downloads, we might not have a full path yet?
+        // Yes we do, task.directory is set at creation.
         valid.add(r);
       }
     }
@@ -52,11 +59,17 @@ final allDownloadsProvider = StreamProvider<List<TaskRecord>>((ref) async* {
 // New behavior: Return list? Or just first matching?
 final activeDownloadByMediaIdProvider =
     FutureProvider.family<TaskRecord?, String>((ref, mediaId) async {
+      final profileId = ref.watch(selectedProfileProvider);
       final records = await FileDownloader().database.allRecords();
       try {
-        return records
-            .where((r) => r.task.metaData.contains('"mediaId":"$mediaId"'))
-            .firstOrNull;
+        return records.where((r) {
+          final task = r.task as DownloadTask;
+          // Filter by profile
+          if (profileId != null && !task.directory.contains('/$profileId/')) {
+            return false;
+          }
+          return task.metaData.contains('"mediaId":"$mediaId"');
+        }).firstOrNull;
       } catch (e) {
         return null;
       }

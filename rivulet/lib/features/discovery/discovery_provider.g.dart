@@ -410,7 +410,7 @@ final class MediaHistoryProvider
         $FutureProvider<List<HistoryItem>> {
   const MediaHistoryProvider._({
     required MediaHistoryFamily super.from,
-    required ({String externalId, String type}) super.argument,
+    required String super.argument,
   }) : super(
          retry: null,
          name: r'mediaHistoryProvider',
@@ -426,7 +426,7 @@ final class MediaHistoryProvider
   String toString() {
     return r'mediaHistoryProvider'
         ''
-        '$argument';
+        '($argument)';
   }
 
   @$internal
@@ -437,12 +437,8 @@ final class MediaHistoryProvider
 
   @override
   FutureOr<List<HistoryItem>> create(Ref ref) {
-    final argument = this.argument as ({String externalId, String type});
-    return mediaHistory(
-      ref,
-      externalId: argument.externalId,
-      type: argument.type,
-    );
+    final argument = this.argument as String;
+    return mediaHistory(ref, externalId: argument);
   }
 
   @override
@@ -456,14 +452,10 @@ final class MediaHistoryProvider
   }
 }
 
-String _$mediaHistoryHash() => r'47345b3019724883e89d1bf06dd420bb5aef6388';
+String _$mediaHistoryHash() => r'3922461932746a5eac5c359aa8535ad1e3915c8c';
 
 final class MediaHistoryFamily extends $Family
-    with
-        $FunctionalFamilyOverride<
-          FutureOr<List<HistoryItem>>,
-          ({String externalId, String type})
-        > {
+    with $FunctionalFamilyOverride<FutureOr<List<HistoryItem>>, String> {
   const MediaHistoryFamily._()
     : super(
         retry: null,
@@ -473,13 +465,8 @@ final class MediaHistoryFamily extends $Family
         isAutoDispose: true,
       );
 
-  MediaHistoryProvider call({
-    required String externalId,
-    required String type,
-  }) => MediaHistoryProvider._(
-    argument: (externalId: externalId, type: type),
-    from: this,
-  );
+  MediaHistoryProvider call({required String externalId}) =>
+      MediaHistoryProvider._(argument: externalId, from: this);
 
   @override
   String toString() => r'mediaHistoryProvider';

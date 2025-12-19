@@ -37,7 +37,4 @@ type MediaProgress struct {
 	DurationTicks int64
 	IsWatched     bool
 	LastPlayedAt  time.Time
-
-	NextSeasonNumber  *int
-	NextEpisodeNumber *int
 }

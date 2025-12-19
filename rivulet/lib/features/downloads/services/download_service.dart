@@ -32,8 +32,82 @@ class DownloadService {
     await FileDownloader().trackTasks();
   }
 
+  Future<void> startMovieDownload({
+    required String mediaUuid,
+    required String url,
+    required String title,
+    required String? logoPath,
+    required String? posterPath,
+    required String? backdropPath,
+    required String? overview,
+    required String? imdbId,
+    required double? voteAverage,
+    required String? profileId,
+  }) async {
+    await _startDownload(
+      mediaUuid: mediaUuid,
+      url: url,
+      title: title,
+      type: 'movie',
+      logoPath: logoPath,
+      posterPath: posterPath,
+      backdropPath: backdropPath,
+      overview: overview,
+      imdbId: imdbId,
+      voteAverage: voteAverage,
+      profileId: profileId,
+    );
+  }
+
+  Future<void> startEpisodeDownload({
+    required String mediaUuid,
+    required String url,
+    required String title,
+    required String? logoPath,
+    required String? seasonPosterPath,
+    required String? posterPath,
+    required String? backdropPath,
+    required String? overview,
+    required String? imdbId,
+    required double? voteAverage,
+    required String? showTitle,
+    required int? seasonNumber,
+    required String? seasonOverview,
+    required String? seasonName,
+    required int? episodeNumber,
+    required String? episodeOverview,
+    required String? episodeStillPath,
+    required String? episodeTitle,
+    required List<Map<String, dynamic>>? seasons, // Accept raw JSON or model
+    required String? profileId,
+  }) async {
+    await _startDownload(
+      mediaUuid: mediaUuid,
+      url: url,
+      title: title,
+      type: 'show',
+      seasonNumber: seasonNumber,
+      episodeNumber: episodeNumber,
+      logoPath: logoPath,
+      seasonPosterPath: seasonPosterPath,
+      posterPath: posterPath,
+      backdropPath: backdropPath,
+      overview: overview,
+      imdbId: imdbId,
+      voteAverage: voteAverage,
+      showTitle: showTitle,
+      seasonOverview: seasonOverview,
+      seasonName: seasonName,
+      episodeOverview: episodeOverview,
+      episodeStillPath: episodeStillPath,
+      episodeTitle: episodeTitle,
+      seasons: seasons,
+      profileId: profileId,
+    );
+  }
+
   /// Starts a download.
-  Future<void> startDownload({
+  Future<void> _startDownload({
     required String mediaUuid,
     required String url,
     required String title,
@@ -47,11 +121,14 @@ class DownloadService {
     double? voteAverage,
     String? showTitle,
     int? seasonNumber,
+    String? seasonOverview,
+    String? seasonName,
     int? episodeNumber,
     String? episodeOverview,
     String? episodeStillPath,
     String? episodeTitle,
     List<Map<String, dynamic>>? seasons, // Accept raw JSON or model
+    String? profileId,
   }) async {
     // 1. Determine Identity and Directory
     // User requested "tt***" folder if possible.
@@ -72,11 +149,14 @@ class DownloadService {
       voteAverage: voteAverage,
       showTitle: showTitle,
       seasonNumber: seasonNumber,
+      seasonOverview: seasonOverview,
+      seasonName: seasonName,
       episodeNumber: episodeNumber,
       episodeOverview: episodeOverview,
       episodeStillPath: episodeStillPath,
       episodeTitle: episodeTitle,
       seasons: seasons,
+      profileId: profileId,
     );
 
     // 3. Determine Video File Path
@@ -84,7 +164,10 @@ class DownloadService {
     String filename;
 
     if (type == 'movie') {
-      final movieDir = await _fs.getMediaDirectory(folderId);
+      final movieDir = await _fs.getMediaDirectory(
+        folderId,
+        profileId: profileId,
+      );
       saveDir = movieDir.path;
       filename = 'video.mp4';
     } else {
@@ -93,6 +176,7 @@ class DownloadService {
         folderId,
         seasonNumber ?? 0,
         episodeNumber ?? 0,
+        profileId: profileId,
       );
       saveDir = episodeDir.path;
       filename = 'video.mp4';
@@ -139,15 +223,21 @@ class DownloadService {
     double? voteAverage,
     String? showTitle,
     int? seasonNumber,
+    String? seasonOverview,
+    String? seasonName,
     int? episodeNumber,
     String? episodeOverview,
     String? episodeStillPath,
     String? episodeTitle,
     List<Map<String, dynamic>>? seasons,
+    String? profileId,
   }) async {
     // A. Media Level (Movie or Show)
     // Always write show/movie details to the root media folder
-    final mediaDir = await _fs.getMediaDirectory(folderId);
+    final mediaDir = await _fs.getMediaDirectory(
+      folderId,
+      profileId: profileId,
+    );
 
     // Write media.json
     // Use Show Title if it's an episode, else Title
@@ -162,13 +252,7 @@ class DownloadService {
       'backdropUrl': backdropPath,
       'logo': logoPath, // Save logo path
       'overview': overview,
-      'type': type == 'movie'
-          ? 'movie'
-          : 'show', // if fetching show, type is show. if fetching ep?
-      // When downloading an episode, we are technically downloading a 'show' component.
-      // But the 'type' param passed to startDownload depends on caller.
-      // Usually caller passes 'episode' for episodes.
-      // But for Library grouping we want 'show'.
+      'type': type,
       'imdbId': imdbId,
       'voteAverage': voteAverage,
     });
@@ -191,14 +275,17 @@ class DownloadService {
 
     // B. Season/Episode Level (if Show)
     if (type == 'episode' || type == 'show') {
-      // Assuming type 'episode' implies it's a show structure
       if (seasonNumber != null && episodeNumber != null) {
-        final seasonDir = await _fs.getSeasonDirectory(folderId, seasonNumber);
-        // Write season.json (Basic info we have)
+        final seasonDir = await _fs.getSeasonDirectory(
+          folderId,
+          seasonNumber,
+          profileId: profileId,
+        );
         await _fs.writeJson(seasonDir, 'season_details.json', {
           'seasonNumber': seasonNumber,
           'posterPath': seasonPosterPath, // Save season poster path
-          // We don't have season name/overview easily unless passed.
+          'overview': seasonOverview,
+          'name': seasonName,
         });
 
         if (seasonPosterPath != null) {
@@ -209,6 +296,7 @@ class DownloadService {
           folderId,
           seasonNumber,
           episodeNumber,
+          profileId: profileId,
         );
 
         await _fs.writeJson(episodeDir, 'details.json', {
@@ -244,7 +332,7 @@ class DownloadService {
     // Maybe not.
   }
 
-  Future<void> delete(String taskId) async {
+  Future<void> delete(String taskId, {String? profileId}) async {
     final task = await _getTaskById(taskId);
     if (task != null) {
       // 1. Cancel the task mechanism (stops download, removes from queue)
@@ -285,9 +373,9 @@ class DownloadService {
   }
 
   // Helper for Library delete
-  Future<void> deleteMedia(String folderId) async {
+  Future<void> deleteMedia(String folderId, {String? profileId}) async {
     // 1. Delete from Filesystem
-    await _fs.deleteMedia(folderId);
+    await _fs.deleteMedia(folderId, profileId: profileId);
 
     // 2. We can't easily delete records from DB as method is missing.
     // We rely on file existence check in UI to ignore ghost records.
@@ -300,8 +388,8 @@ class DownloadService {
     return task as DownloadTask?;
   }
 
-  Future<void> openDownloadsFolder() async {
-    await _fs.openDownloadsFolder();
+  Future<void> openDownloadsFolder({String? profileId}) async {
+    await _fs.openDownloadsFolder(profileId: profileId);
   }
 }
 

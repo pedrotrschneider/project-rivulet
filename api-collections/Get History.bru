@@ -1,0 +1,20 @@
+meta {
+  name: Get History
+  type: http
+  seq: 19
+}
+
+get {
+  url: {{baseUrl}}/api/v1/history
+  body: none
+  auth: inherit
+}
+
+headers {
+  X-Profile-Id: ec6ca237-0064-4b28-b952-e59ad9c5b40d
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
