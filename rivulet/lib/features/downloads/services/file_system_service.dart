@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 part 'file_system_service.g.dart';
 
@@ -16,10 +17,20 @@ class FileSystemService {
   const FileSystemService();
 
   static const String _dataDirName = '.rivulet_data';
+  static const String _customPathKey = 'custom_download_path';
 
   Future<Directory> _getBaseDir(String? profileId) async {
-    final appDocDir = await getApplicationDocumentsDirectory();
-    var path = p.join(appDocDir.path, _dataDirName);
+    final prefs = await SharedPreferences.getInstance();
+    final customPath = prefs.getString(_customPathKey);
+
+    String path;
+    if (customPath != null) {
+      path = customPath;
+    } else {
+      final appDocDir = await getApplicationDocumentsDirectory();
+      path = p.join(appDocDir.path, _dataDirName);
+    }
+
     if (profileId != null) {
       path = p.join(path, profileId);
     }
@@ -28,6 +39,21 @@ class FileSystemService {
       await dir.create(recursive: true);
     }
     return dir;
+  }
+
+  Future<void> setCustomDownloadPath(String path) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_customPathKey, path);
+  }
+
+  Future<String?> getCustomDownloadPath() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_customPathKey);
+  }
+
+  Future<void> resetDownloadPath() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_customPathKey);
   }
 
   Future<Directory> getMediaDirectory(String id, {String? profileId}) async {

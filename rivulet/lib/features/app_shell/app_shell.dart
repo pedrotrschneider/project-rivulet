@@ -6,6 +6,7 @@ import '../auth/auth_provider.dart';
 import '../auth/profiles_provider.dart';
 
 import '../downloads/screens/downloads_screen.dart'; // Import this
+import '../downloads/widgets/configure_download_dialog.dart';
 import '../../core/network/network_monitor.dart';
 
 /// Main app shell with Stremio-style side navigation.
@@ -231,6 +232,12 @@ class _SideNavRail extends StatelessWidget {
                 onChangeProfile();
               } else if (value == 'logout') {
                 onLogout();
+              } else if (value == 'configure_download') {
+                showDialog(
+                  context: context,
+                  builder: (context) =>
+                      const ConfigureDownloadDirectoryDialog(),
+                );
               }
             },
             itemBuilder: (context) => [
@@ -241,6 +248,16 @@ class _SideNavRail extends StatelessWidget {
                     Icon(Icons.switch_account),
                     SizedBox(width: 12),
                     Text('Change Profile'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem<String>(
+                value: 'configure_download',
+                child: Row(
+                  children: [
+                    Icon(Icons.folder_outlined),
+                    SizedBox(width: 12),
+                    Text('Download Directory'),
                   ],
                 ),
               ),
