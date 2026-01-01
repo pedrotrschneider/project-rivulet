@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:fvp/fvp.dart' as fvp;
+
 import 'package:rivulet/features/auth/auth_provider.dart';
 import 'package:rivulet/features/auth/profiles_provider.dart';
 import 'package:rivulet/features/auth/screens/login_screen.dart';
@@ -27,10 +27,6 @@ void main() async {
     }
   }
 
-  fvp.registerWith(options: {
-    'video.decoders': ['FFmpeg'], 
-    'global': {'log': 'off'} 
-  });
   runApp(const ProviderScope(child: MyApp()));
 }
 
