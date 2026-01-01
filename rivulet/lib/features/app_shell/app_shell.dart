@@ -172,110 +172,112 @@ class _SideNavRail extends StatelessWidget {
     return Container(
       width: 80,
       color: Colors.grey.shade900,
-      child: Column(
-        children: [
-          const SizedBox(height: 16),
+      child: SafeArea(
+        child: Column(
+          children: [
+            const SizedBox(height: 16),
 
-          // App Logo/Title
-          Container(
-            padding: const EdgeInsets.all(12),
-            child: Icon(
-              Icons.water_drop,
-              size: 32,
-              color: Colors.deepPurple.shade300,
+            // App Logo/Title
+            Container(
+              padding: const EdgeInsets.all(12),
+              child: Icon(
+                Icons.water_drop,
+                size: 32,
+                color: Colors.deepPurple.shade300,
+              ),
             ),
-          ),
 
-          const SizedBox(height: 24),
+            const SizedBox(height: 24),
 
-          // Navigation Items
-          Expanded(
-            child: ListView.builder(
-              itemCount: items.length,
-              itemBuilder: (context, index) {
-                final item = items[index];
-                final isSelected = index == selectedIndex;
-                // Index 2 is Downloads, others disabled if offline
-                final isDisabled = !isOnline && index != 2;
+            // Navigation Items
+            Expanded(
+              child: ListView.builder(
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  final item = items[index];
+                  final isSelected = index == selectedIndex;
+                  // Index 2 is Downloads, others disabled if offline
+                  final isDisabled = !isOnline && index != 2;
 
-                return _NavButton(
-                  icon: isSelected ? item.selectedIcon : item.icon,
-                  label: item.label,
-                  isSelected: isSelected,
-                  isDisabled: isDisabled,
-                  onTap: () => onItemSelected(index),
-                );
+                  return _NavButton(
+                    icon: isSelected ? item.selectedIcon : item.icon,
+                    label: item.label,
+                    isSelected: isSelected,
+                    isDisabled: isDisabled,
+                    onTap: () => onItemSelected(index),
+                  );
+                },
+              ),
+            ),
+
+            // Profile Menu at Bottom
+            PopupMenuButton<String>(
+              offset: const Offset(80, 0),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Column(
+                  children: [
+                    const Icon(Icons.account_circle, size: 32),
+                    const SizedBox(height: 4),
+                    Text(
+                      profileName,
+                      style: const TextStyle(fontSize: 10),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              onSelected: (value) {
+                if (value == 'change_profile') {
+                  onChangeProfile();
+                } else if (value == 'logout') {
+                  onLogout();
+                } else if (value == 'configure_download') {
+                  showDialog(
+                    context: context,
+                    builder: (context) =>
+                        const ConfigureDownloadDirectoryDialog(),
+                  );
+                }
               },
-            ),
-          ),
-
-          // Profile Menu at Bottom
-          PopupMenuButton<String>(
-            offset: const Offset(80, 0),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: Column(
-                children: [
-                  const Icon(Icons.account_circle, size: 32),
-                  const SizedBox(height: 4),
-                  Text(
-                    profileName,
-                    style: const TextStyle(fontSize: 10),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+              itemBuilder: (context) => [
+                const PopupMenuItem<String>(
+                  value: 'change_profile',
+                  child: Row(
+                    children: [
+                      Icon(Icons.switch_account),
+                      SizedBox(width: 12),
+                      Text('Change Profile'),
+                    ],
                   ),
-                ],
-              ),
+                ),
+                const PopupMenuItem<String>(
+                  value: 'configure_download',
+                  child: Row(
+                    children: [
+                      Icon(Icons.folder_outlined),
+                      SizedBox(width: 12),
+                      Text('Download Directory'),
+                    ],
+                  ),
+                ),
+                const PopupMenuDivider(),
+                const PopupMenuItem<String>(
+                  value: 'logout',
+                  child: Row(
+                    children: [
+                      Icon(Icons.logout, color: Colors.red),
+                      SizedBox(width: 12),
+                      Text('Logout', style: TextStyle(color: Colors.red)),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            onSelected: (value) {
-              if (value == 'change_profile') {
-                onChangeProfile();
-              } else if (value == 'logout') {
-                onLogout();
-              } else if (value == 'configure_download') {
-                showDialog(
-                  context: context,
-                  builder: (context) =>
-                      const ConfigureDownloadDirectoryDialog(),
-                );
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem<String>(
-                value: 'change_profile',
-                child: Row(
-                  children: [
-                    Icon(Icons.switch_account),
-                    SizedBox(width: 12),
-                    Text('Change Profile'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem<String>(
-                value: 'configure_download',
-                child: Row(
-                  children: [
-                    Icon(Icons.folder_outlined),
-                    SizedBox(width: 12),
-                    Text('Download Directory'),
-                  ],
-                ),
-              ),
-              const PopupMenuDivider(),
-              const PopupMenuItem<String>(
-                value: 'logout',
-                child: Row(
-                  children: [
-                    Icon(Icons.logout, color: Colors.red),
-                    SizedBox(width: 12),
-                    Text('Logout', style: TextStyle(color: Colors.red)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-        ],
+            const SizedBox(height: 16),
+          ],
+        ),
       ),
     );
   }

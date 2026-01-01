@@ -37,112 +37,115 @@ class _DiscoveryScreenState extends ConsumerState<DiscoveryScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Discover')),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    decoration: const InputDecoration(
-                      hintText: 'Search movies & shows...',
-                      border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.search),
+      body: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      decoration: const InputDecoration(
+                        hintText: 'Search movies & shows...',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.search),
+                      ),
+                      onSubmitted: (_) => _performSearch(),
                     ),
-                    onSubmitted: (_) => _performSearch(),
                   ),
-                ),
-                const SizedBox(width: 8),
-                IconButton.filled(
-                  icon: const Icon(Icons.arrow_forward),
-                  onPressed: _performSearch,
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  IconButton.filled(
+                    icon: const Icon(Icons.arrow_forward),
+                    onPressed: _performSearch,
+                  ),
+                ],
+              ),
             ),
-          ),
-          Expanded(
-            child: CustomScrollView(
-              slivers: [
-                // 1. History Section (Always Visible)
-                const _HistorySection(),
+            Expanded(
+              child: CustomScrollView(
+                slivers: [
+                  // 1. History Section (Always Visible)
+                  const _HistorySection(),
 
-                // 2. Search Results
-                ...searchState.when(
-                  data: (items) {
-                    if (items.isEmpty) {
+                  // 2. Search Results
+                  ...searchState.when(
+                    data: (items) {
+                      if (items.isEmpty) {
+                        return [
+                          const SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: Center(
+                              child: Text(
+                                'Search for something to start watching',
+                              ),
+                            ),
+                          ),
+                        ];
+                      }
+
+                      final movies = items
+                          .where((i) => i.type == 'movie')
+                          .toList();
+                      final shows = items
+                          .where((i) => i.type != 'movie')
+                          .toList();
+
                       return [
-                        const SliverFillRemaining(
-                          hasScrollBody: false,
-                          child: Center(
-                            child: Text(
-                              'Search for something to start watching',
+                        if (movies.isNotEmpty) ...[
+                          const SliverToBoxAdapter(
+                            child: Padding(
+                              padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
+                              child: Text(
+                                'Movies',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ),
                           ),
-                        ),
+                          _buildGrid(movies),
+                          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                        ],
+                        if (shows.isNotEmpty) ...[
+                          const SliverToBoxAdapter(
+                            child: Padding(
+                              padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+                              child: Text(
+                                'TV Shows',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                          _buildGrid(shows),
+                          const SliverToBoxAdapter(child: SizedBox(height: 24)),
+                        ],
                       ];
-                    }
-
-                    final movies = items
-                        .where((i) => i.type == 'movie')
-                        .toList();
-                    final shows = items
-                        .where((i) => i.type != 'movie')
-                        .toList();
-
-                    return [
-                      if (movies.isNotEmpty) ...[
-                        const SliverToBoxAdapter(
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(16, 16, 16, 12),
-                            child: Text(
-                              'Movies',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                        _buildGrid(movies),
-                        const SliverToBoxAdapter(child: SizedBox(height: 24)),
-                      ],
-                      if (shows.isNotEmpty) ...[
-                        const SliverToBoxAdapter(
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
-                            child: Text(
-                              'TV Shows',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                        _buildGrid(shows),
-                        const SliverToBoxAdapter(child: SizedBox(height: 24)),
-                      ],
-                    ];
-                  },
-                  error: (err, stack) => [
-                    SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: Center(child: Text('Error: $err')),
-                    ),
-                  ],
-                  loading: () => [
-                    const SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: Center(child: CircularProgressIndicator()),
-                    ),
-                  ],
-                ),
-              ],
+                    },
+                    error: (err, stack) => [
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(child: Text('Error: $err')),
+                      ),
+                    ],
+                    loading: () => [
+                      const SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -389,7 +392,7 @@ class _HistoryCard extends ConsumerWidget {
                 // item.isWatched
                 //     ? 'S${item.nextSeason} E${item.nextEpisode}'
                 //     : 'S${item.seasonNumber} E${item.episodeNumber}',
-                    'S${item.seasonNumber} E${item.episodeNumber}',
+                'S${item.seasonNumber} E${item.episodeNumber}',
                 style: const TextStyle(fontSize: 12, color: Colors.grey),
               ),
             if (item.seasonNumber != null)

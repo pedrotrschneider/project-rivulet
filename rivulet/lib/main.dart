@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:fvp/fvp.dart' as fvp;
+
 import 'package:rivulet/features/auth/auth_provider.dart';
 import 'package:rivulet/features/auth/profiles_provider.dart';
 import 'package:rivulet/features/auth/screens/login_screen.dart';
@@ -16,9 +16,8 @@ import 'package:rivulet/core/network/network_monitor.dart';
 import 'package:rivulet/features/utils/platform_utils.dart';
 
 void main() async {
-  await PlatformUtils.init();
-
   WidgetsFlutterBinding.ensureInitialized();
+  await PlatformUtils.init();
 
   if (Platform.isLinux) {
     try {
@@ -28,7 +27,6 @@ void main() async {
     }
   }
 
-  fvp.registerWith();
   runApp(const ProviderScope(child: MyApp()));
 }
 

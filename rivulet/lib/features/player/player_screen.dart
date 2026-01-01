@@ -2,8 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:video_player/video_player.dart';
-import 'package:fvp/fvp.dart' as fvp;
+import 'package:flutter_vlc_player/flutter_vlc_player.dart';
 import 'package:rivulet/features/discovery/repository/discovery_repository.dart';
 import 'package:rivulet/features/discovery/discovery_provider.dart';
 import 'package:rivulet/features/downloads/services/offline_history_service.dart';
@@ -38,7 +37,7 @@ class PlayerScreen extends ConsumerStatefulWidget {
 }
 
 class _PlayerScreenState extends ConsumerState<PlayerScreen> {
-  late VideoPlayerController _controller;
+  late VlcPlayerController _controller;
   bool _isInitialized = false;
   String _title = 'Loading...';
   Timer? _progressTimer;
@@ -46,6 +45,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   // Track selection
   bool _showControls = true;
   Timer? _hideControlsTimer;
+
+  // Track info cache
+  Map<int, String> _audioTracks = {};
+  Map<int, String> _subtitleTracks = {};
 
   @override
   void initState() {
@@ -55,17 +58,42 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
   Future<void> _initPlayer() async {
     try {
-      // Register FVP for better playback support
-      try {
-        fvp.registerWith(
-          options: {
-            'global': {'log': 'off'},
-          },
-        );
-      } catch (_) {}
+      // Note: flutter_vlc_player doesn't support httpHeaders in the same way as video_player
+      // If authorization is needed, it might need to be passed in the URL or via VLC options if supported.
+      // For now, proceeding without headers as per plan.
 
-      _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url));
-      await _controller.initialize();
+      _controller = VlcPlayerController.network(
+        widget.url,
+        hwAcc: HwAcc.full,
+        autoPlay: true,
+        options: VlcPlayerOptions(),
+      );
+
+      // Listen for initialization
+      _controller.addListener(_onPlayerStateChange);
+
+      // Resume logic will be handled after initialization is confirmed
+      // requires checking controller.value.isInitialized in listener appromixately
+
+      String newTitle = widget.title;
+      if (mounted) {
+        setState(() {
+          _title = newTitle;
+        });
+      }
+
+      _startProgressTracking();
+      _startHideControlsTimer();
+    } catch (e) {
+      debugPrint("Error initializing: $e");
+    }
+  }
+
+  void _onPlayerStateChange() async {
+    if (_controller.value.isInitialized && !_isInitialized) {
+      setState(() {
+        _isInitialized = true;
+      });
 
       // Resume logic
       if (widget.startPosition > 0) {
@@ -81,23 +109,19 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
         }
       }
 
-      String newTitle = widget.title;
-      // Try to get title from metadata if available/generic
-      // But widget.title is usually passed from discovery, so prefer that unless it's empty?
-      // Keeping original behavior: explicit title passed in constructor is usually correct.
+      // Initial track fetch
+      _refreshTracks();
+    }
+  }
 
-      if (mounted) {
-        setState(() {
-          _isInitialized = true;
-          _title = newTitle;
-        });
-      }
-
-      _controller.play();
-      _startProgressTracking();
-      _startHideControlsTimer();
-    } catch (e) {
-      debugPrint("Error initializing: $e");
+  Future<void> _refreshTracks() async {
+    final audio = await _controller.getAudioTracks();
+    final subs = await _controller.getSpuTracks();
+    if (mounted) {
+      setState(() {
+        _audioTracks = audio;
+        _subtitleTracks = subs;
+      });
     }
   }
 
@@ -160,9 +184,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     if (widget.offlineMode) {
       ref.invalidate(offlineMediaHistoryProvider(id: widget.externalId));
     } else {
-      ref.invalidate(
-        mediaHistoryProvider(externalId: widget.externalId),
-      );
+      ref.invalidate(mediaHistoryProvider(externalId: widget.externalId));
     }
   }
 
@@ -188,17 +210,20 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     }
   }
 
-  void _showTrackSelector(BuildContext context, String type) {
-    final info = _controller.getMediaInfo();
+  void _showTrackSelector(BuildContext context, String type) async {
+    // Refresh tracks before showing
+    await _refreshTracks();
 
-    if (info == null) {
+    if (!mounted) return;
+
+    final tracks = type == 'audio' ? _audioTracks : _subtitleTracks;
+
+    if (tracks.isEmpty) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text("No media info available")));
+      ).showSnackBar(const SnackBar(content: Text("No tracks available")));
       return;
     }
-
-    final tracks = type == 'audio' ? info.audio : info.subtitle;
 
     showModalBottomSheet(
       context: context,
@@ -213,40 +238,38 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
             ),
-            if (type == 'subtitle')
+            // For subtitles, allow turning off (usually id -1 or similar in some players,
+            // but VLC usually treats key as ID. 'Disabled' is often a specific ID or handled by the lib)
+            // flutter_vlc_player documentation says setSpuTrack(int)
+            if (type ==
+                'subtitle') // Optional "Off" button if needed, assuming -1 turns it off
               ListTile(
                 leading: const Icon(Icons.close),
                 title: const Text("Off"),
                 onTap: () {
-                  _controller.setSubtitleTracks([-1]);
+                  _controller.setSpuTrack(-1);
                   Navigator.pop(ctx);
                 },
               ),
-            if (tracks != null)
-              ...tracks.asMap().entries.map((entry) {
-                final index = entry.key;
-                final track = entry.value;
-                String label = "Track ${index + 1}";
-                final lang = track.metadata['language'];
-                final codec = track.metadata['codec'];
-                if (lang != null) label += " - $lang";
-                if (codec != null) label += " ($codec)";
+            ...tracks.entries.map((entry) {
+              final id = entry.key;
+              final name = entry.value;
 
-                return ListTile(
-                  leading: Icon(
-                    type == 'audio' ? Icons.audiotrack : Icons.subtitles,
-                  ),
-                  title: Text(label),
-                  onTap: () {
-                    if (type == 'audio') {
-                      _controller.setAudioTracks([index]);
-                    } else {
-                      _controller.setSubtitleTracks([index]);
-                    }
-                    Navigator.pop(ctx);
-                  },
-                );
-              }),
+              return ListTile(
+                leading: Icon(
+                  type == 'audio' ? Icons.audiotrack : Icons.subtitles,
+                ),
+                title: Text(name),
+                onTap: () {
+                  if (type == 'audio') {
+                    _controller.setAudioTrack(id);
+                  } else {
+                    _controller.setSpuTrack(id);
+                  }
+                  Navigator.pop(ctx);
+                },
+              );
+            }),
           ],
         );
       },
@@ -257,6 +280,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   void dispose() {
     _progressTimer?.cancel();
     _hideControlsTimer?.cancel();
+    _controller.removeListener(_onPlayerStateChange);
     _controller.dispose();
     super.dispose();
   }
@@ -272,12 +296,13 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           alignment: Alignment.center,
           children: [
             Center(
-              child: _isInitialized
-                  ? AspectRatio(
-                      aspectRatio: _controller.value.aspectRatio,
-                      child: VideoPlayer(_controller),
-                    )
-                  : const CircularProgressIndicator(),
+              child: VlcPlayer(
+                controller: _controller,
+                aspectRatio: _controller.value.aspectRatio > 0
+                    ? _controller.value.aspectRatio
+                    : 16 / 9,
+                placeholder: const Center(child: CircularProgressIndicator()),
+              ),
             ),
             if (_showControls && _isInitialized) _buildControls(),
           ],
@@ -287,89 +312,108 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   }
 
   Widget _buildControls() {
+    // We used to use VideoProgressIndicator, but VlcPlayer doesn't work with it directly.
+    // We need to build a custom slider or use standard Slider.
+
+    final duration = _controller.value.duration;
+    final position = _controller.value.position;
+    final maxDuration = duration.inMilliseconds.toDouble();
+    final currentPos = position.inMilliseconds.toDouble();
+
     return Container(
       color: Colors.black45,
-      child: Column(
-        children: [
-          // Top Bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                BackButton(
-                  color: Colors.white,
-                  onPressed: () {
-                    _reportProgress().then((_) => Navigator.pop(context));
-                  },
-                ),
-                Expanded(
-                  child: Text(
-                    _title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    overflow: TextOverflow.ellipsis,
+      child: SafeArea(
+        child: Column(
+          children: [
+            // Top Bar
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  BackButton(
+                    color: Colors.white,
+                    onPressed: () {
+                      _reportProgress().then((_) => Navigator.pop(context));
+                    },
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.audiotrack, color: Colors.white),
-                  onPressed: () => _showTrackSelector(context, 'audio'),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.subtitles, color: Colors.white),
-                  onPressed: () => _showTrackSelector(context, 'subtitle'),
-                ),
-              ],
+                  Expanded(
+                    child: Text(
+                      _title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.audiotrack, color: Colors.white),
+                    onPressed: () => _showTrackSelector(context, 'audio'),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.subtitles, color: Colors.white),
+                    onPressed: () => _showTrackSelector(context, 'subtitle'),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const Spacer(),
-          // Play/Pause
-          IconButton(
-            iconSize: 64,
-            icon: Icon(
-              _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
-              color: Colors.white,
-            ),
-            onPressed: () {
-              setState(() {
-                _controller.value.isPlaying
-                    ? _controller.pause()
-                    : _controller.play();
+            const Spacer(),
+            // Play/Pause
+            IconButton(
+              iconSize: 64,
+              icon: Icon(
+                _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
+                color: Colors.white,
+              ),
+              onPressed: () {
+                if (_controller.value.isPlaying) {
+                  _controller.pause();
+                } else {
+                  _controller.play();
+                }
+                setState(() {}); // Force update icon
                 _startHideControlsTimer();
-              });
-            },
-          ),
-          const Spacer(),
-          // Bottom Bar
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Text(
-                  _formatDuration(_controller.value.position),
-                  style: const TextStyle(color: Colors.white),
-                ),
-                Expanded(
-                  child: VideoProgressIndicator(
-                    _controller,
-                    allowScrubbing: true,
-                    colors: VideoProgressColors(
-                      playedColor: Theme.of(context).colorScheme.primary,
-                      bufferedColor: Colors.white24,
-                      backgroundColor: Colors.white10,
+              },
+            ),
+            const Spacer(),
+            // Bottom Bar
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Text(
+                    _formatDuration(position),
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                  Expanded(
+                    child: Slider(
+                      value: currentPos.clamp(
+                        0.0,
+                        maxDuration > 0 ? maxDuration : 0.0,
+                      ),
+                      min: 0.0,
+                      max: maxDuration > 0 ? maxDuration : 1.0,
+                      onChanged: (value) {
+                        // Seek
+                        _controller.seekTo(
+                          Duration(milliseconds: value.toInt()),
+                        );
+                        _startHideControlsTimer();
+                      },
+                      activeColor: Theme.of(context).colorScheme.primary,
+                      inactiveColor: Colors.white24,
                     ),
                   ),
-                ),
-                Text(
-                  _formatDuration(_controller.value.duration),
-                  style: const TextStyle(color: Colors.white),
-                ),
-              ],
+                  Text(
+                    _formatDuration(duration),
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
