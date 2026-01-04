@@ -35,11 +35,11 @@ func (r Role) ToString() string {
 
 type Account struct {
 	Base
-	
+
 	// Compound index. Same e-mail can be an admin and a user
-	Email        string `gorm:"uniqueIndex:idx_account_unique;not null"`
-	Role         Role   `gorm:"uniqueIndex:idx_account_unique;not null"`
-	
+	Email string `gorm:"uniqueIndex:idx_account_unique;not null"`
+	Role  Role   `gorm:"uniqueIndex:idx_account_unique;not null"`
+
 	PasswordHash string `gorm:"not null"`
 }
 
@@ -59,7 +59,7 @@ type AccountRefreshToken struct {
 
 // Account Addons table
 
-type AccountAddons struct {
+type AccountAddon struct {
 	Base
 	AccountId   uuid.UUID `gorm:"type:uuid;index;not null"`
 	ManifestUrl string    `gorm:"not null"`
@@ -79,10 +79,11 @@ type UserProfile struct {
 
 type FavoriteStream struct {
 	Base
+	AccountId uuid.UUID `gorm:"type:uuid;index;not null"`
 	ProfileId uuid.UUID `gorm:"type:uuid;index;not null"`
+	AddonId   uuid.UUID `gorm:"type:uuid;index;not null"`
 	ImdbId    string    `gorm:"index;not null"`
-	AddonId   string    `gorm:"index;not null"`
-	TitleHash string    `gorm:"index;not null"`
+	Title     string    `gorm:"index;not null"`
 }
 
 // Libraries Table

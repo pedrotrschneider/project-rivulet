@@ -64,8 +64,9 @@ func CreateFirstAdminAccount(c echo.Context) error {
 // @Failure		 403  {object}  models.ErrorResponse
 // @Failure		 500  {object}  models.ErrorResponse
 func GetAllAdminAccounts(c echo.Context) error {
-	if err := auth.RequireAdmin(c); err != nil {
-		return err
+	role := c.Get("role").(db.Role)
+	if role != db.RoleAdmin {
+		return models.Error(http.StatusForbidden, "Forbidden. Only Admins are allowed to access this endpoint").ToResponse(c)
 	}
 
 	var accounts []db.Account
@@ -97,8 +98,9 @@ func GetAllAdminAccounts(c echo.Context) error {
 // @Failure		 403  {object}  models.ErrorResponse
 // @Failure		 500  {object}  models.ErrorResponse
 func CreateAdminAccount(c echo.Context) error {
-	if err := auth.RequireAdmin(c); err != nil {
-		return err
+	role := c.Get("role").(db.Role)
+	if role != db.RoleAdmin {
+		return models.Error(http.StatusForbidden, "Forbidden. Only Admins are allowed to access this endpoint").ToResponse(c)
 	}
 
 	var req models.CreateAccountRequest
@@ -126,8 +128,9 @@ func CreateAdminAccount(c echo.Context) error {
 // @Failure		 404  {object}  models.ErrorResponse
 // @Failure		 500  {object}  models.ErrorResponse
 func DeleteAdminAccount(c echo.Context) error {
-	if err := auth.RequireAdmin(c); err != nil {
-		return err
+	role := c.Get("role").(db.Role)
+	if role != db.RoleAdmin {
+		return models.Error(http.StatusForbidden, "Forbidden. Only Admins are allowed to access this endpoint").ToResponse(c)
 	}
 
 	accountId, err := uuid.Parse(c.QueryParam("account_id"))
@@ -163,8 +166,9 @@ func DeleteAdminAccount(c echo.Context) error {
 // @Failure		 404  {object}  models.ErrorResponse
 // @Failure		 500  {object}  models.ErrorResponse
 func UpdateAdminAccount(c echo.Context) error {
-	if err := auth.RequireAdmin(c); err != nil {
-		return err
+	role := c.Get("role").(db.Role)
+	if role != db.RoleAdmin {
+		return models.Error(http.StatusForbidden, "Forbidden. Only Admins are allowed to access this endpoint").ToResponse(c)
 	}
 
 	var accountId uuid.UUID = c.Get("account_id").(uuid.UUID)
@@ -203,8 +207,9 @@ func UpdateAdminAccount(c echo.Context) error {
 // @Failure		 403  {object}  models.ErrorResponse
 // @Failure		 500  {object}  models.ErrorResponse
 func GetAllUserAccounts(c echo.Context) error {
-	if err := auth.RequireAdmin(c); err != nil {
-		return err
+	role := c.Get("role").(db.Role)
+	if role != db.RoleAdmin {
+		return models.Error(http.StatusForbidden, "Forbidden. Only Admins are allowed to access this endpoint").ToResponse(c)
 	}
 
 	var accounts []db.Account
@@ -236,8 +241,9 @@ func GetAllUserAccounts(c echo.Context) error {
 // @Failure		 403  {object}  models.ErrorResponse
 // @Failure		 500  {object}  models.ErrorResponse
 func CreateUserAccount(c echo.Context) error {
-	if err := auth.RequireAdmin(c); err != nil {
-		return err
+	role := c.Get("role").(db.Role)
+	if role != db.RoleAdmin {
+		return models.Error(http.StatusForbidden, "Forbidden. Only Admins are allowed to access this endpoint").ToResponse(c)
 	}
 
 	var req models.CreateAccountRequest
@@ -265,8 +271,9 @@ func CreateUserAccount(c echo.Context) error {
 // @Failure		 404  {object}  models.ErrorResponse
 // @Failure		 500  {object}  models.ErrorResponse
 func DeleteUserAccount(c echo.Context) error {
-	if err := auth.RequireAdmin(c); err != nil {
-		return err
+	role := c.Get("role").(db.Role)
+	if role != db.RoleAdmin {
+		return models.Error(http.StatusForbidden, "Forbidden. Only Admins are allowed to access this endpoint").ToResponse(c)
 	}
 
 	accountId, err := uuid.Parse(c.QueryParam("account_id"))

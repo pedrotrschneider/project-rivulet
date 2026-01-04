@@ -1,0 +1,24 @@
+meta {
+  name: User Delete Addon
+  type: http
+  seq: 1
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/addon?addon_id=44a0d729-7377-4aee-bef0-a939088138de
+  body: none
+  auth: inherit
+}
+
+params:query {
+  addon_id: 44a0d729-7377-4aee-bef0-a939088138de
+}
+
+headers {
+  Authorization: Bearer {{userAccessToken}}
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

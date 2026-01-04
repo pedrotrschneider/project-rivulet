@@ -1,0 +1,26 @@
+meta {
+  name: Get Favorite Streams
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/favorite?imdb_id=tt1436448011&addon_id=e2a51434-f40b-4533-8170-36f228a39bdc
+  body: none
+  auth: inherit
+}
+
+params:query {
+  imdb_id: tt1436448011
+  addon_id: e2a51434-f40b-4533-8170-36f228a39bdc
+}
+
+headers {
+  Authorization: Bearer {{userAccessToken}}
+  X-Profile-Id: 97f8e44a-b5d9-4aed-84ed-e5a7a49e888e
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

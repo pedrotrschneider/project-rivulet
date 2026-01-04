@@ -1,0 +1,24 @@
+meta {
+  name: Admin Delete Addon
+  type: http
+  seq: 1
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/addon?addon_id=714fd838-a926-4332-8cd5-b5048abc5841
+  body: none
+  auth: inherit
+}
+
+params:query {
+  addon_id: 714fd838-a926-4332-8cd5-b5048abc5841
+}
+
+headers {
+  Authorization: Bearer {{adminAccessToken}}
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

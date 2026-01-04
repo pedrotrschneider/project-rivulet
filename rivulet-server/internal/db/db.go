@@ -32,7 +32,7 @@ func Connect() {
 		// auth
 		&Account{},
 		&AccountRefreshToken{},
-		&AccountAddons{},
+		&AccountAddon{},
 		&UserProfile{},
 		&FavoriteStream{},
 		&Library{},

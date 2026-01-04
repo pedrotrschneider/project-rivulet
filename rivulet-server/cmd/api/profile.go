@@ -116,8 +116,8 @@ func UpdateProfile(c echo.Context) error {
 	role := c.Get("role").(db.Role)
 
 	// Get the requested profile id
-	profileId, perr := uuid.Parse(c.QueryParam("profile_id"))
-	if perr != nil {
+	profileId, parseErr := uuid.Parse(c.QueryParam("profile_id"))
+	if parseErr != nil {
 		return models.Error(http.StatusBadRequest, "Invalid profile_id").ToResponse(c)
 	}
 
@@ -174,8 +174,8 @@ func DeleteProfile(c echo.Context) error {
 	role := c.Get("role").(db.Role)
 
 	// Get the requested profile id
-	profileId, perr := uuid.Parse(c.QueryParam("profile_id"))
-	if perr != nil {
+	profileId, parseErr := uuid.Parse(c.QueryParam("profile_id"))
+	if parseErr != nil {
 		return models.Error(http.StatusBadRequest, "Invalid profile_id").ToResponse(c)
 	}
 

@@ -1,0 +1,24 @@
+meta {
+  name: Admin Get Installed Addons
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/addon?account_id=4fcd51fb-006f-48a5-8e14-19779e5f15f2
+  body: none
+  auth: inherit
+}
+
+params:query {
+  account_id: 4fcd51fb-006f-48a5-8e14-19779e5f15f2
+}
+
+headers {
+  Authorization: Bearer {{adminAccessToken}}
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

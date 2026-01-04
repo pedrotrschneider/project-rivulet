@@ -1,0 +1,31 @@
+meta {
+  name: Admin Update Installed Addon
+  type: http
+  seq: 1
+}
+
+put {
+  url: {{baseUrl}}/api/v1/addon?addon_id=714fd838-a926-4332-8cd5-b5048abc5841
+  body: json
+  auth: inherit
+}
+
+params:query {
+  addon_id: 714fd838-a926-4332-8cd5-b5048abc5841
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{adminAccessToken}}
+}
+
+body:json {
+  {
+    "priority": 20
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

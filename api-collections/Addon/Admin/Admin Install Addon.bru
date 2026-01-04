@@ -1,0 +1,32 @@
+meta {
+  name: Admin Install Addon
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/addon?account_id=4fcd51fb-006f-48a5-8e14-19779e5f15f2
+  body: json
+  auth: inherit
+}
+
+params:query {
+  account_id: 4fcd51fb-006f-48a5-8e14-19779e5f15f2
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{adminAccessToken}}
+}
+
+body:json {
+  {
+    "manifest_url": "https://mycooladdon.com/manifest.json",
+    "priority": 10
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

@@ -1,0 +1,30 @@
+meta {
+  name: Add Favorite Stream
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/favorite
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{userAccessToken}}
+  X-Profile-Id: 97f8e44a-b5d9-4aed-84ed-e5a7a49e888e
+}
+
+body:json {
+  {
+    "addon_id": "92d85fff-a1e9-481e-9ef4-6c21c50eb5e6",
+    "imdb_id": "tt14364480",
+    "title": "Wake.Up.Dead.Man.A.Knives.Out.Mystery.2025.2160p.NF.WEB-DL.DDP5.1.Atmos.DV.HDR.H👤 657 💾 20.11 GB ⚙️ ThePirateBay"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

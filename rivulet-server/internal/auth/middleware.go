@@ -46,7 +46,7 @@ func RequireAuth(next echo.HandlerFunc) echo.HandlerFunc {
 
 // Responses: 403
 func RequireAdmin(c echo.Context) error {
-	var role db.Role = c.Get("role").(db.Role)
+	role := c.Get("role").(db.Role)
 	if role != db.RoleAdmin {
 		return models.Error(http.StatusForbidden, "Forbidden. Only Admins are allowed to access this endpoint").ToResponse(c)
 	}
@@ -55,7 +55,7 @@ func RequireAdmin(c echo.Context) error {
 
 // Responses 403
 func RequireUser(c echo.Context) error {
-	var role db.Role = c.Get("role").(db.Role)
+	role := c.Get("role").(db.Role)
 	if role != db.RoleUser {
 		return models.Error(http.StatusForbidden, "Forbidden. Only Users are allowed to access this endpoint").ToResponse(c)
 	}

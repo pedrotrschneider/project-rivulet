@@ -101,6 +101,19 @@ func Start() {
 	profile.PUT("", UpdateProfile)
 	profile.DELETE("", DeleteProfile)
 
+	// Addon management
+	addon := protected.Group("/addon")
+	addon.POST("", InstallAddon)
+	addon.GET("", GetInstalledAddons)
+	addon.PUT("", UpdateInstalledAddon)
+	addon.DELETE("", UninstallAddon)
+
+	// Favorites management
+	favorites := protected.Group("/favorite")
+	favorites.POST("", AddFavoriteStream)
+	favorites.GET("", GetFavoriteStreams)
+	favorites.DELETE("", RemoveFavoriteStream)
+
 	e.Logger.Fatal(e.Start(":8080"))
 }
 
@@ -115,3 +128,4 @@ func Start() {
 func GetHealth(c echo.Context) error {
 	return models.Success(http.StatusOK, "OK").ToResponse(c)
 }
+

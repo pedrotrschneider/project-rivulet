@@ -147,3 +147,54 @@ type GetProfilesResponseItem struct {
 	Name   string    `json:"name"`
 	Avatar string    `json:"avatar"`
 }
+
+// --- Addon ---
+
+// Requests
+
+type InstallAddonRequest struct {
+	ManifestUrl string `json:"manifest_url"`
+	Priority    int    `json:"priority"`
+}
+
+type UpdateAddonRequest struct {
+	Priority int `json:"priority"`
+}
+
+// Responses
+
+type GetAddonsResponse struct {
+	AccountId uuid.UUID `json:"account_id"`
+	Addons    []GetAddonsResponseItem
+}
+
+type GetAddonsResponseItem struct {
+	Id          uuid.UUID `json:"id"`
+	ManifestUrl string    `json:"manifest_url"`
+	Priority    int       `json:"priority"`
+}
+
+// --- Favorite ---
+
+// Requests
+
+type AddFavoriteRequest struct {
+	AddonId uuid.UUID `json:"addon_id"`
+	ImdbId  string    `json:"imdb_id"`
+	Title   string    `json:"title"`
+}
+
+// Responses
+
+type GetFavoritesResponse struct {
+	AccountId uuid.UUID                 `json:"account_id"`
+	ProfileId uuid.UUID                 `json:"profile_id"`
+	Favorites []GetFavoritesRsponseItem `json:"favorites"`
+}
+
+type GetFavoritesRsponseItem struct {
+	Id      uuid.UUID `json:"id"`
+	AddonId uuid.UUID `json:"addon_id"`
+	ImdbId  string    `json:"imdb_id"`
+	Title   string    `json:"title"`
+}

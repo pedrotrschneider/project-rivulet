@@ -1,0 +1,25 @@
+meta {
+  name: Remove Favorite Stream
+  type: http
+  seq: 3
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/favorite?favorite_id=de63a35f-91b9-4a4c-b146-07c7f14f9391
+  body: none
+  auth: inherit
+}
+
+params:query {
+  favorite_id: de63a35f-91b9-4a4c-b146-07c7f14f9391
+}
+
+headers {
+  Authorization: Bearer {{userAccessToken}}
+  X-Profile-Id: 97f8e44a-b5d9-4aed-84ed-e5a7a49e888e
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
