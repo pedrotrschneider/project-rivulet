@@ -1,41 +1,63 @@
 package auth
 
 import (
+	"net/http"
+	"rivulet_server/cmd/models"
+	"rivulet_server/internal/db"
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 )
 
+// Responses: 401
 func RequireAuth(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
-		// 1. Get header
+		// Get header
 		authHeader := c.Request().Header.Get("Authorization")
 		if authHeader == "" {
-			return echo.NewHTTPError(401, "Missing Authorization Header")
+			return models.Error(http.StatusUnauthorized, "Missing Authorization Header").ToResponse(c)
 		}
 
-		// 2. Parse "Bearer <token>"
+		// Parse "Bearer <token>"
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 || parts[0] != "Bearer" {
-			return echo.NewHTTPError(401, "Invalid Header Format")
+			return models.Error(http.StatusUnauthorized, "Invalid Header Format").ToResponse(c)
 		}
 		tokenString := parts[1]
 
-		// 3. Verify Token
-		token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+		// Verify Token
+		token, err := jwt.ParseWithClaims(tokenString, &AccessClaims{}, func(token *jwt.Token) (any, error) {
 			return JwtSecret, nil
 		})
 
 		if err != nil || !token.Valid {
-			return echo.NewHTTPError(401, "Invalid or Expired Token")
+			return models.Error(http.StatusUnauthorized, "Invalid or Expired Token").ToResponse(c)
 		}
 
-		// 4. Inject User into Context for downstream handlers
-		claims := token.Claims.(*Claims)
-		c.Set("user_id", claims.AccountID)
-		c.Set("is_admin", claims.IsAdmin)
+		// Inject User into Context for downstream handlers
+		claims := token.Claims.(*AccessClaims)
+		c.Set("account_id", claims.AccountId)
+		c.Set("role", claims.Role)
 
 		return next(c)
 	}
+}
+
+// Responses: 403
+func RequireAdmin(c echo.Context) error {
+	var role db.Role = c.Get("role").(db.Role)
+	if role != db.RoleAdmin {
+		return models.Error(http.StatusForbidden, "Forbidden. Only Admins are allowed to access this endpoint").ToResponse(c)
+	}
+	return nil
+}
+
+// Responses 403
+func RequireUser(c echo.Context) error {
+	var role db.Role = c.Get("role").(db.Role)
+	if role != db.RoleUser {
+		return models.Error(http.StatusForbidden, "Forbidden. Only Users are allowed to access this endpoint").ToResponse(c)
+	}
+	return nil
 }

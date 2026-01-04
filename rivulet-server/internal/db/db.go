@@ -3,7 +3,6 @@ package db
 import (
 	"log"
 	"os"
-	"rivulet_server/internal/models"
 
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -31,24 +30,15 @@ func Connect() {
 	log.Println("⚙️ Running Migrations...")
 	err = DB.AutoMigrate(
 		// auth
-		&models.Account{},
-		&models.Profile{},
-
-		// media
-		&models.Movie{},
-		&models.Series{},
-		&models.Season{},
-		&models.Episode{},
-		&models.Person{},
-		&models.Credit{},
-		&models.Image{},
-
-		// library
-		&models.LibraryEntry{},
-		&models.MediaProgress{},
-
-		// favorites
-		&models.FavoriteTorrent{},
+		&Account{},
+		&AccountRefreshToken{},
+		&AccountAddons{},
+		&UserProfile{},
+		&FavoriteStream{},
+		&Library{},
+		&LibraryEntry{},
+		&MediaProgress{},
+		&WatchedMedia{},
 	)
 	if err != nil {
 		log.Fatal("❌ Migration failed:", err)

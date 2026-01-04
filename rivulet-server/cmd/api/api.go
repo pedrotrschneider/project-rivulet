@@ -2,84 +2,116 @@ package api
 
 import (
 	"net/http"
+	"rivulet_server/cmd/models"
+	_ "rivulet_server/docs"
 	"rivulet_server/internal/auth"
+	"rivulet_server/internal/db"
 
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	echoSwagger "github.com/swaggo/echo-swagger"
 )
+
+// --- Helpers ---
+
+func MapAuthResultToResponse(result auth.AuthResult) models.Response {
+	if result.Success {
+		return models.Success(result.Code, result.Data)
+	}
+	return models.Error(result.Code, result.Data)
+}
+
+// Helper function for requests that have complex logic to get account_id.
+// If the caller is an Admin, we get the `account_id` from the query parameter.
+// If the caller is an User, we get the `account_id` from the context.
+// If a User Account calls the endpoint with an `account_id` query parameter, it will be rejected.
+// Response: 400
+func GetAccountIdLogic(c echo.Context) (uuid.UUID, *models.ErrorResponse) {
+	role := c.Get("role").(db.Role)
+	if role == db.RoleAdmin {
+		// This means the caller is an Admin account. We get the `account_id` from the query parameter.
+		_accountId, err := uuid.Parse(c.QueryParam("account_id"))
+		if err != nil {
+			return uuid.UUID{}, &models.ErrorResponse{Code: http.StatusBadRequest, Error: "Invalid account_id"}
+		}
+		return _accountId, nil
+	} else {
+		// This means the caller is an User account. We get the `account_id` from the context.
+		if c.QueryParam("account_id") != "" {
+			return uuid.UUID{}, &models.ErrorResponse{Code: http.StatusBadRequest, Error: "User accounts cannot use the `account_id` parameter. Please call this endpoint without the account_id parameter"}
+		}
+		return c.Get("account_id").(uuid.UUID), nil
+	}
+}
+
+// --- Handlers ---
 
 func Start() {
 	e := echo.New()
-	e.Use(middleware.Logger())
+	e.Use(middleware.RequestLogger())
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORS())
 
-	// Public Routes
-	e.GET("/api/v1/system/info", GetSystemInfo)
-	e.POST("/api/v1/auth/register", auth.Register) // Temp helper
-	e.POST("/api/v1/auth/login", auth.Login)
-	e.POST("/api/v1/auth/verify", auth.Verify)
-
-	// Static assets
-	e.Static("/api/v1/images", "./assets")
-
-	// Protected Routes (Group)
 	v1 := e.Group("/api/v1")
-	v1.Use(auth.RequireAuth) // Apply middleware
 
-	// Health check
-	v1.GET("/health", func(c echo.Context) error {
-		// Example of accessing the user ID from the token
-		userID := c.Get("user_id")
-		return c.JSON(http.StatusOK, map[string]any{
-			"status": "healthy",
-			"user":   userID,
-		})
+	// Public Routes
+	v1.GET("/health", GetHealth)
+	v1.POST("/account/admin/first", CreateFirstAdminAccount)
+	v1.POST("/auth/login", Login)
+	v1.POST("/auth/refresh", Refresh)
+
+	v1.GET("/swagger/*", echoSwagger.WrapHandler)
+	v1.GET("/swagger", func(c echo.Context) error {
+		return c.Redirect(http.StatusMovedPermanently, "swagger/index.html")
 	})
 
-	// Config
-	v1.GET("/user/config", GetUserConfig)
-	v1.POST("/user/config", UpdateUserConfig)
+	// Static assets
+	// e.Static("/api/v1/images", "./assets")
 
-	// Discovery
-	v1.GET("/discover/search", Search)
-	v1.GET("/discover/details/:id", GetDetails)
-	v1.GET("/discover/tv/:id/seasons", GetShowSeasons)
-	v1.GET("/discover/tv/:id/season/:num", GetSeasonEpisodes)
+	// Protected Routes
+	protected := v1.Group("")
+	protected.Use(auth.RequireAuth)
 
-	// Real Debrid
-	v1.POST("/rd/unrestrict", Unrestrict)
+	// Authentication
+	auth := protected.Group("/auth")
+	auth.GET("/health", GetAuthHealth)
+	auth.POST("/logout", Logout)
+	auth.DELETE("/session", EndSession)
+	auth.GET("/session/all", GetActiveSessions)
+	auth.DELETE("/session/all", EndAllSessions)
 
-	// Torrent scraping
-	v1.GET("/stream/scrape", ScrapeStreams)
+	// Account management
+	account := protected.Group("/account")
 
-	// Torrent Resolve
-	v1.POST("/stream/resolve", ResolveStream)
+	account.POST("/admin", CreateAdminAccount)
+	account.GET("/admin", GetAllAdminAccounts)
+	account.PUT("/admin", UpdateAdminAccount)
+	account.DELETE("/admin", DeleteAdminAccount)
 
-	// Profiles
-	v1.GET("/profiles", ListProfiles)
-	v1.POST("/profiles", CreateProfile)
+	account.POST("/user", CreateUserAccount)
+	account.GET("/user", GetAllUserAccounts)
+	account.PUT("/user", UpdateUserAccount)
+	account.DELETE("/user", DeleteUserAccount)
 
-	// Favorites
-	favorites := v1.Group("/favorites")
-	favorites.POST("", AddFavorite)
-	favorites.DELETE("", RemoveFavorite)
-	favorites.POST("/check", CheckFavorites)
-
-	// Library
-	library := v1.Group("/library")
-	library.POST("", AddToLibrary)
-	library.GET("", GetLibrary)
-	library.GET("/check/:id", CheckLibrary)
-	library.DELETE("/:id", RemoveFromLibrary)
-	library.GET("/tv/:id/seasons", GetLibraryShowSeasons)
-	library.GET("/tv/:id/season/:num", GetLibrarySeasonEpisodes)
-
-	// History
-	v1.POST("/history/progress", UpdateProgress)
-	v1.DELETE("/history/progress", DeleteProgress)
-	v1.GET("/history", GetProfileHistory)
-	v1.GET("/history/media", GetMediaHistory)
+	// Profile management
+	profile := protected.Group("/profile")
+	profile.POST("", CreateProfile)
+	profile.GET("", GetProfiles)
+	profile.PUT("", UpdateProfile)
+	profile.DELETE("", DeleteProfile)
 
 	e.Logger.Fatal(e.Start(":8080"))
+}
+
+// --- General Routes ---
+
+// @Summary      Check server availability
+// @Description  Check server availability. This endpoint will only fail if the server is not running.
+// @Tags         General
+// @Produce      json
+// @Success      200  {object}  models.SuccessResponse
+// @Router       /api/v1/health [get]
+func GetHealth(c echo.Context) error {
+	return models.Success(http.StatusOK, "OK").ToResponse(c)
 }
