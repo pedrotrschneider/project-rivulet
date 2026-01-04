@@ -1,0 +1,20 @@
+meta {
+  name: User Auth Health
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/auth/health
+  body: none
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{userAccessToken}}
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

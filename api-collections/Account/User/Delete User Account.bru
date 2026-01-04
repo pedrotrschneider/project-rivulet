@@ -1,0 +1,20 @@
+meta {
+  name: Delete User Account
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/account/user?account_id=95fd5d9d-c09b-48d9-ac94-ee1a2d7043a8
+  body: none
+  auth: inherit
+}
+
+params:query {
+  account_id: 95fd5d9d-c09b-48d9-ac94-ee1a2d7043a8
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

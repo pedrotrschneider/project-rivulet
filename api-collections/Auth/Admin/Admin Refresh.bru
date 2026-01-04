@@ -1,0 +1,32 @@
+meta {
+  name: Admin Refresh
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{baseUrl}}/api/v1/auth/refresh
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "refresh_token": "{{adminRefreshToken}}"
+  }
+}
+
+script:post-response {
+  let data = res.getBody();
+  bru.setVar("adminAccessToken", data.access_token);
+  bru.setVar("adminRefreshToken", data.refresh_token);
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

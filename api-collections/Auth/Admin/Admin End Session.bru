@@ -1,0 +1,24 @@
+meta {
+  name: Admin End Session
+  type: http
+  seq: 5
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/auth/session?family_id=97a1a854-2258-4784-a30b-47fd454ea161
+  body: none
+  auth: inherit
+}
+
+params:query {
+  family_id: 97a1a854-2258-4784-a30b-47fd454ea161
+}
+
+headers {
+  Authorization: Bearer {{adminAccessToken}}
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

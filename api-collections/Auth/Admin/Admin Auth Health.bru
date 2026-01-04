@@ -1,17 +1,17 @@
 meta {
-  name: Get History
+  name: Admin Auth Health
   type: http
-  seq: 19
+  seq: 1
 }
 
 get {
-  url: {{baseUrl}}/api/v1/history
+  url: {{baseUrl}}/api/v1/auth/health
   body: none
   auth: inherit
 }
 
 headers {
-  X-Profile-Id: ec6ca237-0064-4b28-b952-e59ad9c5b40d
+  Authorization: Bearer {{adminAccessToken}}
 }
 
 settings {

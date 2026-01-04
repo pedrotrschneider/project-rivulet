@@ -1,0 +1,24 @@
+meta {
+  name: User Delete Profile
+  type: http
+  seq: 1
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/profile?profile_id=270d26b5-e466-433d-9ae7-f152425bde73
+  body: none
+  auth: inherit
+}
+
+params:query {
+  profile_id: 270d26b5-e466-433d-9ae7-f152425bde73
+}
+
+headers {
+  Authorization: Bearer {{userAccessToken}}
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

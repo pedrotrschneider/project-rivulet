@@ -1,11 +1,11 @@
 meta {
-  name: Delete History
+  name: Get Swagger
   type: http
-  seq: 21
+  seq: 4
 }
 
-delete {
-  url: {{baseUrl}}/api/vi/history/progress
+get {
+  url: {{baseUrl}}/api/v1/swagger
   body: none
   auth: inherit
 }

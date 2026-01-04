@@ -1,0 +1,24 @@
+meta {
+  name: Admin Get Active Sessions
+  type: http
+  seq: 6
+}
+
+get {
+  url: {{baseUrl}}/api/v1/auth/session/all?account_id=73781a66-5f62-4549-bbd5-ee26b80aae3d
+  body: none
+  auth: inherit
+}
+
+params:query {
+  account_id: 73781a66-5f62-4549-bbd5-ee26b80aae3d
+}
+
+headers {
+  Authorization: Bearer {{adminAccessToken}}
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

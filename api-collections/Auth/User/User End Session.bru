@@ -1,0 +1,24 @@
+meta {
+  name: User End Session
+  type: http
+  seq: 1
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/auth/session?family_id=6d2b2a75-000a-40bf-bdf6-8007fd3908fb
+  body: none
+  auth: inherit
+}
+
+params:query {
+  family_id: 6d2b2a75-000a-40bf-bdf6-8007fd3908fb
+}
+
+headers {
+  Authorization: Bearer {{userAccessToken}}
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

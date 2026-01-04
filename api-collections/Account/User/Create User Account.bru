@@ -1,0 +1,28 @@
+meta {
+  name: Create User Account
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/account/user
+  body: json
+  auth: inherit
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{adminAccessToken}}
+}
+
+body:json {
+  {
+    "email": "{{userEmail}}",
+    "password": "{{userPassword}}"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

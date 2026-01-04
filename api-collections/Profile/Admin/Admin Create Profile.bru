@@ -1,0 +1,32 @@
+meta {
+  name: Admin Create Profile
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{baseUrl}}/api/v1/profile?account_id=4fcd51fb-006f-48a5-8e14-19779e5f15f2
+  body: json
+  auth: inherit
+}
+
+params:query {
+  account_id: 4fcd51fb-006f-48a5-8e14-19779e5f15f2
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{adminAccessToken}}
+}
+
+body:json {
+  {
+    "name": "Pedro",
+    "avatar": "https://cool-avatar.com"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

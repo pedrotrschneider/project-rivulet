@@ -1,0 +1,32 @@
+meta {
+  name: User Update Profile
+  type: http
+  seq: 1
+}
+
+put {
+  url: {{baseUrl}}/api/v1/profile?profile_id=ef6f024c-0f10-46d1-ac54-4cda346ceac4
+  body: json
+  auth: inherit
+}
+
+params:query {
+  profile_id: ef6f024c-0f10-46d1-ac54-4cda346ceac4
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{userAccessToken}}
+}
+
+body:json {
+  {
+  //   "name": "Defaultttttttt",
+    "avatar": "https://new-cool-profileeeee.commmm"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

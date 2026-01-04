@@ -1,11 +1,11 @@
 meta {
-  name: Config
+  name: Create First Admin Account
   type: http
-  seq: 6
+  seq: 1
 }
 
 post {
-  url: {{baseUrl}}/api/v1/user/config
+  url: {{baseUrl}}/api/v1/account/admin/first
   body: json
   auth: inherit
 }
@@ -16,9 +16,8 @@ headers {
 
 body:json {
   {
-    "real_debrid_key": "{{rdApiKey}}",
-    "tmdb_key": "{{tmdbApiKey}}",
-    "mdblist_key": "{{mdblistApiKey}}"
+    "email": "{{adminEmail}}",
+    "password": "{{adminPassword}}"
   }
 }
 

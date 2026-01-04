@@ -1,23 +1,24 @@
 meta {
-  name: Verify
+  name: User Create Profile
   type: http
-  seq: 4
+  seq: 1
 }
 
 post {
-  url: {{baseUrl}}/api/v1/auth/verify
+  url: {{baseUrl}}/api/v1/profile
   body: json
   auth: inherit
 }
 
 headers {
   Content-Type: application/json
+  Authorization: Bearer {{userAccessToken}}
 }
 
 body:json {
   {
-    "email": "{{devEmail}}",
-    "code": "544006"
+    "name": "Yuki",
+    "avatar": "https://cool-avatar.com"
   }
 }
 

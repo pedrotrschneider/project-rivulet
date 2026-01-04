@@ -1,23 +1,23 @@
 meta {
-  name: Create User
+  name: User Logout
   type: http
-  seq: 2
+  seq: 1
 }
 
 post {
-  url: {{baseUrl}}/api/v1/auth/register
+  url: {{baseUrl}}/api/v1/auth/logout
   body: json
   auth: inherit
 }
 
 headers {
   Content-Type: application/json
+  Authorization: Bearer {{userAccessToken}}
 }
 
 body:json {
   {
-    "email": "{{devEmail}}",
-    "password": "{{devPassword}}"
+    "refresh_token": "{{userRefreshToken}}"
   }
 }
 

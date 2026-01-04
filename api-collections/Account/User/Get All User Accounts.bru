@@ -1,0 +1,20 @@
+meta {
+  name: Get All User Accounts
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{baseUrl}}/api/v1/account/user
+  body: none
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{adminAccessToken}}
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

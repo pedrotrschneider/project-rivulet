@@ -1,0 +1,20 @@
+meta {
+  name: User Get Active Sessions
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{baseUrl}}/api/v1/auth/session/all
+  body: none
+  auth: inherit
+}
+
+headers {
+  Authorization: Bearer {{userAccessToken}}
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

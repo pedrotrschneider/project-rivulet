@@ -1,0 +1,32 @@
+meta {
+  name: Admin Update Profile
+  type: http
+  seq: 3
+}
+
+put {
+  url: {{baseUrl}}/api/v1/profile?profile_id=ef6f024c-0f10-46d1-ac54-4cda346ceac4
+  body: json
+  auth: inherit
+}
+
+params:query {
+  profile_id: ef6f024c-0f10-46d1-ac54-4cda346ceac4
+}
+
+headers {
+  Content-Type: application/json
+  Authorization: Bearer {{adminAccessToken}}
+}
+
+body:json {
+  {
+  //   "name": "Defaultttttttt",
+    "avatar": "https://new-cool-profileeeee.com"
+  }
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

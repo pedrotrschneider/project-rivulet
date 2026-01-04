@@ -1,0 +1,24 @@
+meta {
+  name: Admin Delete Profile
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{baseUrl}}/api/v1/profile?profile_id=ef6f024c-0f10-46d1-ac54-4cda346ceac4
+  body: none
+  auth: inherit
+}
+
+params:query {
+  profile_id: ef6f024c-0f10-46d1-ac54-4cda346ceac4
+}
+
+headers {
+  Authorization: Bearer {{adminAccessToken}}
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}
